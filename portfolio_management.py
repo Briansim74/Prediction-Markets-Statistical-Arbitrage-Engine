@@ -468,24 +468,49 @@ class Portfolio():
             print("positions_df is empty, returning mtm")
             return positions_df
 
-        def get_position_price(token_id):
+        def fee(price, fee_rate):
+            #fee = C × feeRate × p × (1 - p)
+            #Where C = number of shares traded and p = price of the shares.
+            return fee_rate * price * (1 - price)
 
+        # def get_position_price(token_id):
+
+        #     bids = api.orderbook(token_id).get("bids", [])
+
+        #     return (max(float(x["price"]) for x in bids) if bids else None)
+
+        def get_position_data(token_id):
             bids = api.orderbook(token_id).get("bids", [])
+            current_price = max(float(x["price"]) for x in bids) if bids else None
 
-            return (max(float(x["price"]) for x in bids) if bids else None)
+            fee_rate = float(api.fee_rate(token_id)["fee_rate"])
 
-        # Get current price for every position
+            return current_price, fee_rate
+
+        # # Get current price for every position
+        # with ThreadPoolExecutor(max_workers=30) as executor:
+        #     positions_df["current_price"] = list(executor.map(get_position_price, positions_df["token_id"]))
+
         with ThreadPoolExecutor(max_workers=30) as executor:
-            positions_df["current_price"] = list(executor.map(get_position_price, positions_df["token_id"]))
+            results = list( executor.map(get_position_data, positions_df["token_id"]))
+
+        # Unpack results
+        positions_df["current_price"] = [x[0] for x in results]
+        positions_df["fee_rate"] = [x[1] for x in results]
 
         # Current market value
         positions_df["market_value"] = (positions_df["shares"] * positions_df["current_price"])
+        positions_df["market_value_after_fees"] = (positions_df["shares"] * 
+            (positions_df["current_price"] - fee(positions_df["current_price"], positions_df["fee_rate"])))
 
         # Original cost
         positions_df["cost_basis"] = (positions_df["shares"] * positions_df["avg_entry_price"])
 
         # Unrealized PnL
         positions_df["unrealized_pnl"] = (positions_df["market_value"] - positions_df["cost_basis"])
+
+        # Unrealized PnL
+        positions_df["unrealized_pnl_after_fees"] = (positions_df["market_value_after_fees"] - positions_df["cost_basis"])
 
         # Return
         positions_df["unrealized_return"] = (positions_df["unrealized_pnl"] / positions_df["cost_basis"])
@@ -573,7 +598,7 @@ class Portfolio():
         equity_df["timestamp"] = pd.to_datetime(equity_df["timestamp"], utc=True)
         
         # ---------------------------------------------------------
-        # 7. Calculate Sharpe / Sortino
+        # 7. Calculate Sharpe / Sortino / Max Drawdown
         # ---------------------------------------------------------
         returns = equity_df["period_return"].dropna()
 
@@ -588,7 +613,10 @@ class Portfolio():
                 sharpe = np.nan
 
             # Sortino
-            downside_returns = returns[returns < 0]
+            # downside_returns = returns[returns < 0]
+            downside_returns = np.minimum(returns, 0) # new sortino
+            downside_deviation = np.sqrt(np.mean(downside_returns ** 2))
+            sortino = returns.mean() / downside_deviation
 
             if len(downside_returns) > 0:
                 downside_deviation = np.sqrt((downside_returns ** 2).mean())
@@ -602,11 +630,19 @@ class Portfolio():
             sharpe = np.nan
             sortino = np.nan
 
+        
+        equity_copy = equity_df["equity"].copy().dropna()
+        running_peak = equity_copy.cummax()
+
+        drawdown = equity_copy / running_peak - 1
+        max_drawdown = drawdown.min()
+
         # ---------------------------------------------------------
         # 8. Store metrics
         # ---------------------------------------------------------
         equity_df.loc[equity_df.index[-1], "sharpe"] = sharpe
         equity_df.loc[equity_df.index[-1], "sortino"] = sortino
+        equity_df.loc[equity_df.index[-1], "max_drawdown"] = max_drawdown
 
         # ---------------------------------------------------------
         # 9. Print
@@ -615,6 +651,7 @@ class Portfolio():
         print(f"Return:  {period_return:.4%}" if pd.notna(period_return) else "Return: N/A")
         print(f"Sharpe:  {sharpe:.4f}" if pd.notna(sharpe) else "Sharpe: N/A")
         print(f"Sortino: {sortino:.4f}" if pd.notna(sortino) else "Sortino: N/A")
+        print(f"Max Drawdown: {max_drawdown:.2%}" if pd.notna(max_drawdown) else "Max Drawdown: N/A")
 
         return equity_df
 
@@ -813,10 +850,10 @@ class Portfolio():
     # New Opportunities Step
     def run_new_opportunities(self, api, opportunities_df, orders_df, 
                               ENTRY_EV_THRESHOLD=0.02, MAX_POSITION=0.05, FRACTION=0.1):
-
-        cash = float(api.balance()["balance"])
             
         for _, trade in opportunities_df.iterrows():
+
+            cash = float(api.balance()["balance"])
     
             if trade["best_ev"] < ENTRY_EV_THRESHOLD:
                 print(f"Current trade is less than required ev ({ENTRY_EV_THRESHOLD}), skipping")
@@ -918,6 +955,387 @@ class Portfolio():
     
             else:
                 print("\nLIMIT SKIPPING ORDER\n\n")
+    
+        return orders_df
+
+
+    def format_arbitrage_entry(self, api, trade, cash):
+
+        leg_1_question = trade["lower_question"] if "lower_question" in trade else trade["A_question"]
+        leg_1_token_id = trade["lower_token_id"] if "lower_token_id" in trade else trade["A_token_id"]
+        leg_1_ask = trade["lower_price"] if "lower_price" in trade else trade["A_price"]
+        leg_1_outcome = trade["lower_outcome"] if "lower_outcome" in trade else trade["A_outcome"]
+        leg_1_condition_id = trade["lower_condition_id"] if "lower_condition_id" in trade else trade["A_condition_id"]
+
+        leg_2_question = trade["higher_question"] if "higher_question" in trade else trade["B_question"]
+        leg_2_token_id = trade["higher_token_id"] if "higher_token_id" in trade else trade["B_token_id"]
+        leg_2_ask = trade["higher_price"] if "higher_price" in trade else trade["B_price"]
+        leg_2_outcome = trade["higher_outcome"] if "higher_outcome" in trade else trade["B_outcome"]
+        leg_2_condition_id = trade["higher_condition_id"] if "higher_condition_id" in trade else trade["B_condition_id"]
+
+        leg_1_client_oid = str(uuid.uuid4())
+        leg_2_client_oid = str(uuid.uuid4())
+
+        enter_all = (cash - trade["total_cost"] > 0)
+        executable_normalized_size = api.normalize_size(trade["max_size"]) if enter_all else api.normalize_size(cash / trade["cost_per_unit"])
+        executable_total_cost = executable_normalized_size * trade["cost_per_unit"]
+        executable_guaranteed_profit = executable_normalized_size * trade["guaranteed_profit_per_unit"]
+        print("=" * 70)
+        print("ENTRY ARBITRAGE SIGNAL")
+        print("=" * 70)
+
+        rows = [
+            ("Event Type", trade["event_type"]),
+            ("Direction", trade["direction"]),
+            ("Expiry / Resolution Date", trade["expiry"]),
+            (""),
+            ("Leg 1 Market", trade["lower_question"] if "lower_question" in trade else trade["A_question"]),
+            ("Leg 1 Strike", trade["lower_strike"] if "lower_strike" in trade else trade["A_strike"]),
+            ("Leg 1 Outcome", leg_1_outcome),
+            ("Leg 1 Current Ask", leg_1_ask),
+            (""),
+            ("Leg 2 Market", trade["higher_question"] if "higher_question" in trade else trade["B_question"]),
+            ("Leg 2 Strike", trade["higher_strike"] if "higher_strike" in trade else trade["B_strike"]),
+            ("Leg 2 Outcome", leg_2_outcome),
+            ("Leg 2 Current Ask", leg_2_ask),
+            (""),
+            ("Enter All Positions",enter_all),
+            ("Max Size", trade["max_size"]),
+            ("Executable Normalized Size", executable_normalized_size),
+            ("Executable Total Cost", executable_total_cost),
+            ("Executable Total Guaranteed Profit", executable_guaranteed_profit),
+            ("Total Guaranteed Profit", trade["total_guaranteed_profit"]),
+            ("Cash", cash),
+        ]
+
+        for label, value in rows:
+            print(f"{label:<25} : {value}")
+
+        print("=" * 70)
+        print(f"{'VARIABLES IN REQUEST':^70}")
+
+        rows = [
+            ("Leg 1 tokenId", leg_1_token_id),
+            ("Leg 1 orderPrice", leg_1_ask),
+            ("Leg 1 orderSize", executable_normalized_size),
+            ("Leg 1 clientOrderId", leg_1_client_oid),
+            ("Leg 1 Action", "BUY"),
+            (""),
+            ("Leg 2 tokenId", leg_2_token_id),
+            ("Leg 2 orderPrice", leg_2_ask),
+            ("Leg 2 orderSize", executable_normalized_size),
+            ("Leg 2 clientOrderId", leg_2_client_oid),
+            ("Leg 2 Action", "BUY"),
+        ]
+
+        for label, value in rows:
+            print(f"{label:<25} : {value}")
+
+        print("=" * 70)
+
+        return {
+            "leg_1_question" : leg_1_question,
+            "leg_2_question" : leg_2_question,
+            "leg_1_token_id" : leg_1_token_id,
+            "leg_2_token_id" : leg_2_token_id,
+            "leg_1_ask" : leg_1_ask,
+            "leg_2_ask" : leg_2_ask,
+            "leg_1_outcome" : leg_1_outcome,
+            "leg_2_outcome" : leg_2_outcome,
+            "leg_1_condition_id" : leg_1_condition_id,
+            "leg_2_condition_id" : leg_2_condition_id
+        }
+
+
+    def run_arbitrage_opportunities(self, api, arbitrage_df, orders_df):
+    
+        for _, trade in arbitrage_df.iterrows():
+
+            cash = float(api.balance()["balance"])
+
+            remaining_capacity = cash
+    
+            if remaining_capacity == 0:
+                print(f"No more dollars to allocate for this trade position, skipping, remaining_capacity: {remaining_capacity}")
+                continue
+    
+            dollars = remaining_capacity
+    
+            if dollars < 1.0:
+                print(f"Order too small after position cap, skipping, dollars: {dollars}")
+                continue
+    
+            print(f"dollars: {dollars}")
+    
+            params = self.format_arbitrage_entry(api, trade, cash)
+    
+            confirm_order = (input("Place this order? Type YES to confirm: ") == "YES")
+            
+            if confirm_order == True:
+
+                try:
+                    print("")
+                    order_1 = api.place_limit_order_test(
+                        token_id=params["leg_1_token_id"],
+                        side="buy",
+                        price=params["leg_1_ask"],
+                        size=params["normalized_size"],
+                        order_type="GTC",
+                        client_order_id=params["leg_1_client_oid"]
+                    )
+            
+                    print("\nLEG 1 LIMIT ORDER SUBMITTED\n\n")
+                    print(order_1)
+
+                    order_2 = api.place_limit_order_test(
+                        token_id=params["leg_2_token_id"],
+                        side="buy",
+                        price=params["leg_2_ask"],
+                        size=params["normalized_size"],
+                        order_type="GTC",
+                        client_order_id=params["leg_2_client_oid"]
+                    )
+            
+                    print("\nLEG 2 LIMIT ORDER SUBMITTED\n\n")
+                    print(order_2)
+    
+                    order_row = {
+                        "question": params["leg_1_question"],
+                        "order_id": order_1["clob_order_id"],
+                        "condition_id": params["leg_1_condition_id"],
+                        "token_id": params["leg_1_token_id"],
+                        "outcome": params["leg_1_outcome"],
+                        "side": "BUY",
+                        "price": float(params["leg_1_ask"]),
+                        "requested_size": params["normalized_size"],
+                        "order_type": "GTC",
+                        "status": "OPEN",
+                        "created_at": datetime.now(timezone.utc),
+                        "cancelled_at": None,
+                    }
+            
+                    orders_df = pd.concat([orders_df, pd.DataFrame([order_row])], ignore_index=True)
+                    print("\nLEG 1 LIMIT ORDER RECORDED\n\n")
+
+                    order_row = {
+                        "question": params["leg_2_question"],
+                        "order_id": order_2["clob_order_id"],
+                        "condition_id": params["leg_2_condition_id"],
+                        "token_id": params["leg_2_token_id"],
+                        "outcome": params["leg_2_outcome"],
+                        "side": "BUY",
+                        "price": float(params["leg_2_ask"]),
+                        "requested_size": params["normalized_size"],
+                        "order_type": "GTC",
+                        "status": "OPEN",
+                        "created_at": datetime.now(timezone.utc),
+                        "cancelled_at": None,
+                    }
+            
+                    orders_df = pd.concat([orders_df, pd.DataFrame([order_row])], ignore_index=True)
+                    orders_df["created_at"] = pd.to_datetime(orders_df["created_at"], utc=True)
+                    orders_df["cancelled_at"] = pd.to_datetime(orders_df["cancelled_at"], utc=True)
+            
+                    print("\nLEG 2 LIMIT ORDER RECORDED\n\n")
+    
+                except Exception as e:
+                    print("\nLIMIT ORDER ERROR\n\n")
+                    print(e)
+                    break
+    
+            else:
+                print("\nLIMIT SKIPPING ORDER\n\n")
+    
+        return orders_df
+
+
+    def format_arbitrage_exit(self, api, leg_1, leg_2):
+
+        def fee(price, fee_rate):
+            #fee = C × feeRate × p × (1 - p)
+            #Where C = number of shares traded and p = price of the shares.
+            return fee_rate * price * (1 - price)
+
+        fee_rate = float(api.fee_rate(leg_1["token_id"])["fee_rate"])
+        
+        leg_1_current_size = leg_1["shares"]
+        leg_2_current_size = leg_2["shares"]
+        max_current_size = min(leg_1_current_size, leg_2_current_size)
+        
+        leg_1_book = api.orderbook(leg_1["token_id"])
+        leg_2_book = api.orderbook(leg_2["token_id"])
+
+        leg_1_bids = leg_1_book.get("bids", [])
+        leg_2_bids = leg_2_book.get("bids", [])
+
+        leg_1_best_bid = max(leg_1_bids, key=lambda x: float(x["price"])) if leg_1_bids else None
+        leg_2_best_bid = max(leg_2_bids, key=lambda x: float(x["price"])) if leg_2_bids else None
+
+        leg_1_bid = float(leg_1_best_bid["price"]) if leg_1_best_bid else None
+        leg_1_bid_size = float(leg_1_best_bid["size"]) if leg_1_best_bid else None
+
+        leg_2_bid = float(leg_2_best_bid["price"]) if leg_2_best_bid else None
+        leg_2_bid_size = float(leg_2_best_bid["size"]) if leg_2_best_bid else None
+
+        max_size = min(leg_1_bid_size, leg_2_bid_size)
+        remaining_size = max_current_size if (max_size - max_current_size > 0) else max_current_size - max_size
+        close_all = (max_size - max_current_size > 0)
+
+        avg_realized_pnl = (leg_1_bid - fee(leg_1_bid, fee_rate) - leg_1["avg_entry_price"]) + (leg_2_bid - fee(leg_2_bid, fee_rate) - leg_2["avg_entry_price"])
+        executable_total_realized_pnl = avg_realized_pnl * remaining_size
+        expected_total_realized_pnl = avg_realized_pnl * max_current_size
+        
+        normalized_size = api.normalize_size(remaining_size)
+        
+        leg_1_client_oid = str(uuid.uuid4())
+        leg_2_client_oid = str(uuid.uuid4())
+    
+        print("=" * 70)
+        print("EXIT ARBITRAGE SIGNAL")
+        print("=" * 70)
+
+        rows = [
+            ("Leg 1 Market", leg_1["question"]),
+            ("Leg 1 Outcome", leg_1["outcome"]),
+            ("Leg 1 Size", leg_1["shares"]),
+            ("Leg 1 Avg Entry Price", leg_1["avg_entry_price"]),
+            ("", ""),
+            ("Leg 2 Market", leg_2["question"]),
+            ("Leg 2 Outcome", leg_2["outcome"]),
+            ("Leg 2 Size", leg_2["shares"]),
+            ("Leg 2 Avg Entry Price", leg_2["avg_entry_price"]),
+            ("", ""),
+            ("Close All Positions", close_all),
+            ("Max Size", max_size),
+            ("Normalized Max Size", normalized_size),
+            ("Remaining Size", remaining_size),
+            ("Avg Realized PnL", avg_realized_pnl),
+            ("Executable Total Realized PnL", executable_total_realized_pnl),
+            ("Expected Total Realized PnL", expected_total_realized_pnl)
+        ]
+
+        for label, value in rows:
+            print(f"{label:<25} : {value}")
+
+        print("=" * 70)
+        print(f"{'VARIABLES IN REQUEST':^70}")
+
+        rows = [
+            ("Leg 1 tokenId", leg_1["token_id"]),
+            ("Leg 1 orderPrice", leg_1_bid),
+            ("Leg 1 orderSize", normalized_size),
+            ("Leg 1 clientOrderId", leg_1_client_oid),
+            ("Leg 1 Action", "SELL"),
+            ("", ""),
+            ("Leg 2 tokenId", leg_2["token_id"]),
+            ("Leg 2 orderPrice", leg_2_bid),
+            ("Leg 2 orderSize", normalized_size),
+            ("Leg 2 clientOrderId", leg_2_client_oid),
+            ("Leg 2 Action", "SELL"),
+        ]
+
+        for label, value in rows:
+            print(f"{label:<25} : {value}")
+
+        print("=" * 70)
+
+        return {
+            "normalized_size" : normalized_size,
+            "leg_1_token_id": leg_1["token_id"],
+            "leg_2_token_id": leg_2["token_id"],
+            "leg_1_bid" : leg_1_bid,
+            "leg_2_bid" : leg_2_bid,
+            "leg_1_client_oid" : leg_1_client_oid,
+            "leg_2_client_oid" : leg_2_client_oid
+        }
+
+
+    def close_arbitrage_positions(self, api, positions_df, orders_df, 
+                                  question_1, outcome_1, question_2, outcome_2):
+
+        leg_1 = positions_df[
+            (positions_df["question"] == question_1) &
+            (positions_df["outcome"] == outcome_1)
+            ].iloc[0]
+
+        leg_2 = positions_df[
+            (positions_df["question"] == question_2) &
+            (positions_df["outcome"] == outcome_2)
+            ].iloc[0]
+
+        params = self.format_arbitrage_exit(api, leg_1, leg_2)
+
+        confirm_order = (input("Place this order? Type YES to confirm: ") == "YES")
+        
+        if confirm_order == True:
+
+            try:
+                print("")
+                order_1 = api.place_limit_order_test(
+                    token_id=params["leg_1_token_id"],
+                    side="sell",
+                    price=params["leg_1_bid"],
+                    size=params["normalized_size"],
+                    order_type="GTC",
+                    client_order_id=params["leg_1_client_oid"]
+                )
+        
+                print("\nLEG 1 LIMIT ORDER SUBMITTED\n\n")
+                print(order_1)
+
+                order_2 = api.place_limit_order_test(
+                    token_id=params["leg_2_token_id"],
+                    side="sell",
+                    price=params["leg_2_bid"],
+                    size=params["normalized_size"],
+                    order_type="GTC",
+                    client_order_id=params["leg_2_client_oid"]
+                )
+        
+                print("\nLEG 2 LIMIT ORDER SUBMITTED\n\n")
+                print(order_2)
+
+                order_row = {
+                    "question": question_1,
+                    "order_id": order_1["clob_order_id"],
+                    "condition_id": leg_1["condition_id"],
+                    "token_id": leg_1["token_id"],
+                    "outcome": leg_1["outcome"],
+                    "side": "BUY",
+                    "price": float(params["leg_1_bid"]),
+                    "requested_size": params["normalized_size"],
+                    "order_type": "GTC",
+                    "status": "OPEN",
+                    "created_at": datetime.now(timezone.utc),
+                    "cancelled_at": None,
+                }
+        
+                orders_df = pd.concat([orders_df, pd.DataFrame([order_row])], ignore_index=True)
+
+                order_row = {
+                    "question": question_2,
+                    "order_id": order_2["clob_order_id"],
+                    "condition_id": leg_1["condition_id"],
+                    "token_id": leg_2["token_id"],
+                    "outcome": leg_2["outcome"],
+                    "side": "BUY",
+                    "price": float(params["leg_2_bid"]),
+                    "requested_size": params["normalized_size"],
+                    "order_type": "GTC",
+                    "status": "OPEN",
+                    "created_at": datetime.now(timezone.utc),
+                    "cancelled_at": None,
+                }
+        
+                orders_df = pd.concat([orders_df, pd.DataFrame([order_row])], ignore_index=True)
+                orders_df["created_at"] = pd.to_datetime(orders_df["created_at"], utc=True)
+                orders_df["cancelled_at"] = pd.to_datetime(orders_df["cancelled_at"], utc=True)
+        
+                print("\nLIMIT ORDER RECORDED\n\n")
+
+            except Exception as e:
+                print("\nLIMIT ORDER ERROR\n\n")
+                print(e)
     
         return orders_df
 

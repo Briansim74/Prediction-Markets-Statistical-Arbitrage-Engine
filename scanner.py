@@ -90,13 +90,26 @@ class MarketScanner:
         markets_df["yes_token"] = markets_df["tokens"].apply(lambda x: x[0])
         markets_df["no_token"] = markets_df["tokens"].apply(lambda x: x[1])
 
+        # book_cols = [
+        #     "yes_book",
+        #     "no_book",
+        #     "yes_bid",
+        #     "yes_ask",
+        #     "no_bid",
+        #     "no_ask",
+        # ]
+
         book_cols = [
             "yes_book",
             "no_book",
             "yes_bid",
+            "yes_bid_size",
             "yes_ask",
+            "yes_ask_size",
             "no_bid",
+            "no_bid_size",
             "no_ask",
+            "no_ask_size"
         ]
 
         with ThreadPoolExecutor(max_workers=30) as executor:
@@ -123,7 +136,7 @@ class MarketScanner:
         opportunities_df = markets_df[markets_df["best_ev"] > 0].sort_values("best_ev", ascending=False)
 
         # new sorting order
-        cols = ["question", "endDate", "yes_ask", "yes_bid", "no_ask", "no_bid", "model_prob"]
+        cols = ["question", "yes_ask", "yes_bid", "no_ask", "no_bid", "model_prob"]
 
         markets_df = markets_df[cols + [c for c in markets_df.columns if c not in cols]]
         opportunities_df = opportunities_df[cols + [c for c in opportunities_df.columns if c not in cols]]
@@ -271,10 +284,10 @@ class MarketScanner:
             "direction": direction,
             "event_type": event_type
         }
-    
+
 
     def get_books(self, row):
-
+    
         yes_book = self.api.orderbook(row["yes_token"])
         no_book = self.api.orderbook(row["no_token"])
 
@@ -284,23 +297,35 @@ class MarketScanner:
         no_bids = no_book.get("bids", [])
         no_asks = no_book.get("asks", [])
 
+         # Best YES bid / ask
+        yes_best_bid = max(yes_bids, key=lambda x: float(x["price"])) if yes_bids else None
+        yes_best_ask = min(yes_asks, key=lambda x: float(x["price"])) if yes_asks else None
+
+        # Best NO bid / ask
+        no_best_bid = max(no_bids, key=lambda x: float(x["price"])) if no_bids else None
+        no_best_ask = min(no_asks, key=lambda x: float(x["price"])) if no_asks else None
+
         return pd.Series({
             "yes_book": yes_book,
             "no_book": no_book,
 
             # Highest price someone is bidding
-            "yes_bid": (max(float(x["price"]) for x in yes_bids) if yes_bids else None),
+            "yes_bid": float(yes_best_bid["price"]) if yes_best_bid else None,
+            "yes_bid_size": float(yes_best_bid["size"]) if yes_best_bid else None,
 
             # Lowest price someone is asking
-            "yes_ask": (min(float(x["price"]) for x in yes_asks) if yes_asks else None),
+            "yes_ask": float(yes_best_ask["price"]) if yes_best_ask else None,
+            "yes_ask_size": float(yes_best_ask["size"]) if yes_best_ask else None,
 
             # Highest price someone is bidding
-            "no_bid": (max(float(x["price"]) for x in no_bids) if no_bids else None),
+            "no_bid": float(no_best_bid["price"]) if no_best_bid else None,
+            "no_bid_size": float(no_best_bid["size"]) if no_best_bid else None,
 
             # Lowest price someone is asking
-            "no_ask": (min(float(x["price"]) for x in no_asks) if no_asks else None)
+            "no_ask": float(no_best_ask["price"]) if no_best_ask else None,
+            "no_ask_size": float(no_best_ask["size"]) if no_best_ask else None
         })
-
+    
 
     def calculate_ev(
             self,
@@ -495,7 +520,7 @@ class MarketScanner:
 
 
     def scan_arbitrage(self, arb_candidates_df):
-
+    
         def fee(price, fee_rate):
             #fee = C × feeRate × p × (1 - p)
             #Where C = number of shares traded and p = price of the shares.
@@ -506,24 +531,33 @@ class MarketScanner:
             "currency",
             "event_type",
             "direction",
+            "expiry",
             "A_strike",
             "A_question",
-            "A_id",
-            "A_side",
+            "A_outcome",
             "A_price",
+            "A_size",
             "A_cost",
+            "A_condition_id",
+            "B_condition_id",
+            "A_token_id",
+            "B_token_id",
             "B_strike",
             "B_question",
-            "B_id",
-            "B_side",
+            "B_outcome",
             "B_price",
+            "B_size",
             "B_cost",
+            "cost_per_unit",
+            "guaranteed_profit_per_unit",
+            "max_size",
             "total_cost",
-            "guaranteed_profit",
+            "total_guaranteed_profit"
         ]
 
-        for (currency, event_type, direction, strike), group_df in arb_candidates_df.groupby(["currency", "event_type", "direction", "strike"]):
+        for (currency, event_type, direction, strike, expiry), group_df in arb_candidates_df.groupby(["currency", "event_type", "direction", "strike", "expiry"]):
             n = len(group_df)
+
             if n == 2:
                 print(group_df)
 
@@ -549,87 +583,115 @@ class MarketScanner:
                 print("")
 
                 if guaranteed_profit_1 > 0:
+                    max_size = min(A["yes_ask_size"], B["no_ask_size"])
+
                     cross_market_arbs.append({
                     "currency": currency,
                     "event_type": event_type,
                     "direction": direction,
+                    "expiry": expiry,
 
                     # Lower leg
                     "A_strike": A["strike"],
                     "A_question": A["question"],
-                    "A_id": A["id"],
-                    "A_side": "Yes",
+                    "A_token_id": A["yes_token"],
+                    "A_outcome": "Yes",
                     "A_price": A["yes_ask"],
+                    "A_size": A["yes_ask_size"],
                     "A_cost": yes_A,
+                    "A_condition_id": A["conditionId"],
 
                     # Higher leg
                     "B_strike": B["strike"],
                     "B_question": B["question"],
-                    "B_id": B["id"],
-                    "B_side": "No",
+                    "B_token_id": B["no_token"],
+                    "B_outcome": "No",
                     "B_price": B["no_ask"],
+                    "B_size": B["no_ask_size"],
                     "B_cost": no_B,
+                    "B_condition_id": B["conditionId"],
 
                     # Arb
-                    "total_cost": arb_1,
-                    "guaranteed_profit": guaranteed_profit_1,
+                    "cost_per_unit": arb_1,
+                    "guaranteed_profit_per_unit": guaranteed_profit_1,
+                    "max_size": max_size,
+                    "total_cost": arb_1 * max_size,
+                    "total_guaranteed_profit": guaranteed_profit_1 * max_size
                 })
 
                 if guaranteed_profit_2 > 0:
+                    max_size = min(A["no_ask_size"], B["yes_ask_size"])
+
                     cross_market_arbs.append({
                     "currency": currency,
                     "event_type": event_type,
                     "direction": direction,
+                    "expiry": A["expiry"],
 
                     # Lower leg
                     "A_strike": A["strike"],
                     "A_question": A["question"],
-                    "A_id": A["id"],
-                    "A_side": "No",
+                    "A_token_id": A["no_token"],
+                    "A_outcome": "No",
                     "A_price": A["no_ask"],
+                    "A_size": A["no_ask_size"],
                     "A_cost": no_A,
+                    "A_condition_id": A["conditionId"],
 
                     # Higher leg
                     "B_strike": B["strike"],
                     "B_question": B["question"],
-                    "B_id": B["id"],
-                    "B_side": "Yes",
+                    "B_token_id": B["yes_token"],
+                    "B_outcome": "Yes",
                     "B_price": B["yes_ask"],
+                    "B_size": B["yes_ask_size"],
                     "B_cost": yes_B,
+                    "B_condition_id": B["conditionId"],
 
                     # Arb
-                    "total_cost": arb_2,
-                    "guaranteed_profit": guaranteed_profit_2,
+                    "cost_per_unit": arb_2,
+                    "guaranteed_profit_per_unit": guaranteed_profit_2,
+                    "max_size": max_size,
+                    "total_cost": arb_2 * max_size,
+                    "total_guaranteed_profit": guaranteed_profit_2 * max_size
                 })
 
         cross_market_arb_df = pd.DataFrame(cross_market_arbs, columns=cross_market_arb_columns)
-
+        cross_market_arb_df = cross_market_arb_df.sort_values("guaranteed_profit_per_unit", ascending=False)
 
         vertical_arbs = []
         vertical_arb_columns = [
             "currency",
             "event_type",
             "direction",
+            "expiry",
             "lower_strike",
             "lower_question",
-            "lower_id",
-            "lower_side",
+            "lower_outcome",
             "lower_price",
+            "lower_size",
             "lower_cost",
+            "lower_condition_id",
+            "higher_condition_id",
+            "lower_token_id",
+            "higher_token_id",
             "higher_strike",
             "higher_question",
-            "higher_id",
-            "higher_side",
+            "higher_outcome",
             "higher_price",
+            "higher_size",
             "higher_cost",
+            "cost_per_unit",
+            "guaranteed_profit_per_unit",
+            "max_size",
             "total_cost",
-            "guaranteed_profit",
+            "total_guaranteed_profit"
         ]
 
-        for (currency, event_type, direction), group_df in arb_candidates_df.groupby(["currency", "event_type", "direction"]):
+        for (currency, event_type, direction, expiry), group_df in arb_candidates_df.groupby(["currency", "event_type", "direction", "expiry"]):
             group_df = group_df.sort_values("strike").reset_index(drop=True)
             n = len(group_df)
-            
+
             if direction == "up":
                 print("up\n")
 
@@ -638,9 +700,8 @@ class MarketScanner:
                     higher = group_df.iloc[i]
 
                     lower_cost = lower["yes_ask"] + fee(lower["yes_ask"], lower["feeSchedule"]["rate"])
-
                     higher_cost = higher["no_ask"] + fee(higher["no_ask"], higher["feeSchedule"]["rate"])
-
+    
                     cost = lower_cost + higher_cost
                     guaranteed_profit = 1 - cost
 
@@ -651,30 +712,40 @@ class MarketScanner:
                     print("")
 
                     if guaranteed_profit > 0:
+                        max_size = min(lower["yes_ask_size"], higher["no_ask_size"])
+
                         vertical_arbs.append({
                         "currency": currency,
                         "event_type": event_type,
                         "direction": direction,
+                        "expiry": expiry,
 
                         # Lower leg
                         "lower_strike": lower["strike"],
                         "lower_question": lower["question"],
-                        "lower_id": lower["id"],
-                        "lower_side": "Yes",
+                        "lower_token_id": lower["yes_token"],
+                        "lower_outcome": "Yes",
                         "lower_price": lower["yes_ask"],
+                        "lower_size": lower["yes_ask_size"],
                         "lower_cost": lower_cost,
+                        "lower_condition_id": lower["conditionId"],
 
                         # Higher leg
                         "higher_strike": higher["strike"],
                         "higher_question": higher["question"],
-                        "higher_id": higher["id"],
-                        "higher_side": "No",
+                        "higher_token_id": higher["no_token"],
+                        "higher_outcome": "No",
                         "higher_price": higher["no_ask"],
+                        "higher_size": higher["no_ask_size"],
                         "higher_cost": higher_cost,
+                        "higher_condition_id": higher["conditionId"],
 
                         # Arb
-                        "total_cost": cost,
-                        "guaranteed_profit": guaranteed_profit,
+                        "cost_per_unit": cost,
+                        "guaranteed_profit_per_unit": guaranteed_profit,
+                        "max_size": max_size,
+                        "total_cost": cost * max_size,
+                        "total_guaranteed_profit": guaranteed_profit * max_size
                     })
 
             elif direction == "down":
@@ -698,33 +769,44 @@ class MarketScanner:
                     print("")
 
                     if guaranteed_profit > 0:
+                        max_size = min(lower["no_ask_size"], higher["yes_ask_size"])
+
                         vertical_arbs.append({
                         "currency": currency,
                         "event_type": event_type,
                         "direction": direction,
+                        "expiry": expiry,
 
                         # Lower leg
                         "lower_strike": lower["strike"],
                         "lower_question": lower["question"],
-                        "lower_id": lower["id"],
-                        "lower_side": "No",
+                        "lower_token_id": lower["no_token"],
+                        "lower_outcome": "No",
                         "lower_price": lower["no_ask"],
+                        "lower_size": lower["no_ask_size"],
                         "lower_cost": lower_cost,
+                        "lower_condition_id": lower["conditionId"],
 
                         # Higher leg
                         "higher_strike": higher["strike"],
                         "higher_question": higher["question"],
-                        "higher_id": higher["id"],
-                        "higher_side": "Yes",
+                        "higher_token_id": higher["yes_token"],
+                        "higher_outcome": "Yes",
                         "higher_price": higher["yes_ask"],
+                        "higher_size": higher["yes_ask_size"],
                         "higher_cost": higher_cost,
+                        "higher_condition_id": higher["conditionId"],
 
                         # Arb
-                        "total_cost": cost,
-                        "guaranteed_profit": guaranteed_profit,
+                        "cost_per_unit": cost,
+                        "guaranteed_profit_per_unit": guaranteed_profit,
+                        "max_size": max_size,
+                        "total_cost": cost * max_size,
+                        "total_guaranteed_profit": guaranteed_profit * max_size
                     })
 
         vertical_arb_df = pd.DataFrame(vertical_arbs, columns=vertical_arb_columns)
+        vertical_arb_df = vertical_arb_df.sort_values("guaranteed_profit_per_unit", ascending=False)
 
         if(len(cross_market_arb_df) > 1):
             print("Cross Market Arbitrage Found!")

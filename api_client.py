@@ -123,6 +123,12 @@ class TradingDeskAPI:
 
         print("\n{ TEST } - PLACED LIMIT ORDER")
 
+        print("token_id:", token_id)
+        print("side:", side)
+        print("price:", price)
+        print("size:", size)
+        print("client_oid:", client_order_id)
+
         return {
             "clob_order_id": str(uuid.uuid4()),
             "replayed": False
