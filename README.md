@@ -20,7 +20,7 @@ Max Drawdown:           -1.33%
 ```
 
 Strategy trade:
-- One independent trading opportunity/position.
+- One independent trading opportunity / position.
 - A multi-leg arbitrage is counted as one strategy trade, with each contract treated as a separate leg.
 
 Results shown are from live trading and are not backtested. 
@@ -100,13 +100,18 @@ This allows the system to detect pricing inconsistencies across contracts withou
 The scanner also evaluates the logical ordering of contracts with different strikes.
 
 For an upward barrier event, a lower strike should be at least as likely to be reached as a higher strike:
-<p align="center"><b>P(S touches K_lower) ≥ P(S touches K_higher)</b></p>
-
+```
+P(S touches K_lower) ≥ P(S touches K_higher)
+```
 Therefore, for two contracts with:
-<p align="center"><b>K_lower < K_higher</b></p>
+```
+K_lower < K_higher
+```
 
 the system searches for situations where:
-<p align="center"><b>YES(K_lower) + NO(K_higher) < $1</b></p>
+```
+YES(K_lower) + NO(K_higher) < $1
+```
 
 after fees.
 
@@ -238,7 +243,9 @@ Will BTC reach $120,000 before December 25?
 Will ETH fall to $2,500 before expiry?
 ```
 The system estimates:
-<p align="center"><b>P(touch)</b></p>
+```
+P(touch)
+```
 
 using the underlying price, volatility and time to expiry.
 
@@ -253,24 +260,29 @@ Will ETH finish below $3,000?
 ```
 The system estimates:
 
-<p align="center"><b>P(S_T > K)</b></p>
-
+```
+P(S_T > K)
+```
 or
-
-<p align="center"><b>P(S_T < K)</b></p>
-
+```
+P(S_T < K)
+```
 depending on the contract direction.
 
 ### Probability → Price
 A prediction-market YES contract can be interpreted approximately as:
-<p align="center"><b>P_market = P_P(YES)</b></p>
+```
+P_market = P_P(YES)
+```
 
 For example:
 ```
 YES ask = $0.38
 ```
 implies a physical market probability of approximately:
-<p align="center"><b>P_P(YES) = 38%</b></p>
+```
+P_P(YES) = 38%
+```
 
 If the model estimates:
 ```
@@ -444,8 +456,9 @@ Recalculate Expected Value
 ```
 
 Current exit threshold:
+```
 EXIT_EV_THRESHOLD = -0.02
-
+```
 If the expected value of continuing to hold the position deteriorates sufficiently, the system generates an exit signal.
 
 The relevant question is not:
@@ -513,19 +526,27 @@ This makes portfolio accounting independent of the current exchange position sna
 Open positions are continuously marked against current executable bids.
 
 For each position:
-<p align="center"><b>Market_Value = Shares * Current_Bid</b></p>
+```
+Market_Value = Shares * Current_Bid
+```
 
 and:
-<p align="center"><b>Unrealized_PnL = Market_Value − Cost_Basis</b></p>
+```
+Unrealized_PnL = Market_Value − Cost_Basis
+```
 
 The portfolio therefore maintains both:
-<p align="center"><b>Realized_PnL + Unrealized_PnL</b></p>
+```
+Realized_PnL + Unrealized_PnL
+```
 
 rather than relying only on settled trades.
 
 ## Portfolio Monitoring
 Portfolio equity is calculated as:
-<p align="center"><b>Equity = Cash + Market_Value</b></p>
+```
+Equity = Cash + Market_Value
+```
 
 The system records periodic equity snapshots containing:
 - timestamp
@@ -535,6 +556,7 @@ The system records periodic equity snapshots containing:
 - realized PnL
 - unrealized PnL
 - daily return
+- max drawdown
 
 This creates a persistent performance history for evaluating the trading strategy.
 
@@ -548,11 +570,13 @@ The system attempts to quantify the probability of the event rather than trade p
 The objective is not to predict the market in isolation.
 
 It is to identify:
-<p align="center"><b>P_model ≠ P_market</b></p>
+```
+P_model ≠ P_market
+```
 
 with enough margin to justify taking risk.
 
-Exploit structural relationships
+#### Exploit structural relationships
 
 Related prediction contracts can contain arbitrage opportunities even without forecasting the underlying asset.
 
