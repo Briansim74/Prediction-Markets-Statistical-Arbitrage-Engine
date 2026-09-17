@@ -5,46 +5,39 @@ Research Findings, Live Results & Next Steps - 17 September 2026
 I built and deployed a live systematic trading engine for BTC and ETH prediction markets, with the objective of testing whether pricing inefficiencies can be identified, quantified and executed after realistic transaction costs and portfolio constraints.
 
 The system investigates two distinct sources of edge:
-#### Probability-based relative value
-Estimating event probabilities from BTC and ETH options markets and comparing calibrated estimates with executable prediction-market prices.
+#### a. Probability-based relative value
+```
+Estimating event probabilities from BTC and ETH options markets and
+comparing calibrated estimates with executable prediction-market prices.
+```
 
-#### Structural arbitrage
-Identifying deterministic pricing relationships across equivalent contracts and across contracts whose payoffs impose monotonicity or other no-arbitrage constraints.
-
+#### b. Structural arbitrage
+```
+Identifying deterministic pricing relationships across equivalent
+contracts and across contracts whose payoffs impose monotonicity or other no-arbitrage constraints.
+```
 The research and trading architecture deliberately separates signal generation from execution. Opportunities are evaluated using executable bid/ask prices, fees, liquidity, position sizing, inventory constraints and portfolio-level capital allocation rather than relying on midpoint prices or theoretical spreads alone.
 
 The engine has been live since 14 August 2026. The current live sample contains 4 strategy trades, 8 executed orders and 8 fills. Live P&L remains a very small sample and is therefore not treated as evidence of a persistent trading edge. The current results are primarily useful as validation of the research, execution and portfolio-management pipeline.
 
-The research has produced several findings.
+### 1.1. Key Research Findings
+The research has produced four main findings.
 
-First, the options-derived probability signal contains information about the relative likelihood of crypto price-touch events: higher predicted probabilities have generally corresponded to higher realized event frequencies. However, the raw probabilities are not fully calibrated, meaning that the model output cannot be directly interpreted as an unbiased physical probability. This makes probability calibration, particularly in the low-probability tail relevant to trading, a central research problem.
+#### H1 - The probability signal contains information, but is not fully calibrated.
+Options-derived touch probabilities generally preserve the ordering of event likelihood: contracts assigned higher probabilities have tended to realize more frequently. However, predicted probabilities do not consistently match realized frequencies, particularly in regions relevant to trading. The current evidence therefore supports the model as a probability signal, but not as a directly interpretable physical probability.
 
-Second, model-market dislocations exist, but a difference between model probability and prediction-market price is not sufficient to establish mispricing. The discrepancy can reflect model error, risk-neutral versus physical probability differences, risk premia, liquidity or execution costs. The next stage is therefore focused on determining whether calibrated dislocations have predictive and economically meaningful subsequent behavior.
+#### H2 - Model-market dislocations exist, but their subsequent price behavior is not yet clearly predictive.
+The calibrated model frequently differs from executable prediction-market prices, creating measurable model-market dislocations. I tested whether the magnitude and direction of these dislocations predicted subsequent market moves over 1h, 4h, 24h, 72h and 1-week horizons. The relationship was weak and non-monotonic across the tested horizons: larger positive model-market edges did not consistently produce larger subsequent moves in the expected direction. This suggests that model-market disagreement alone is not yet sufficient as a trading signal, and motivates further work on calibration, execution-aware returns and conditional dislocation analysis.
 
-Third, the structural arbitrage engine identified a live cross-market BTC opportunity involving two contracts representing the same $150,000 price-touch event. The observed executable combination had a post-fee cost of approximately $0.9989 against a $1.00 settlement value, implying approximately 11.2 basis points of theoretical edge per matched pair. The available size was approximately 113 pairs, corresponding to roughly $0.13 of theoretical profit.
+#### H3 - Cross-market arbitrage was detected but not deployed.
+The engine identified a live BTC opportunity involving two contracts representing the same $150,000 price-touch event. The complementary position had a post-fee executable cost of approximately $0.9989 against a $1.00 settlement value, implying approximately 11.2 bps of theoretical edge per matched pair. Approximately 113 pairs were available, corresponding to ~$0.13 of theoretical profit. However, existing capital was already committed to another structural position, so the opportunity was not deployed after considering capital utilization and opportunity cost.
 
-The important finding was not simply that the engine detected the discrepancy. Because existing capital was already committed to another structural arbitrage position, reallocating capital to the new opportunity was not attractive relative to the opportunity cost of closing or displacing the existing position. I therefore treated the opportunity as a detected theoretical/executable dislocation rather than automatically deploying capital into it.
+#### H4 - Vertical arbitrage produced a live position.
+The engine identified a pricing inconsistency between ETH $5,500 and $6,000 touch contracts. Because touching $6,000 necessarily implies touching $5,500, the combination of YES $5,500 + NO $6,000 has a minimum settlement value of $1 per matched pair, subject to contract definitions and settlement rules. The strategy entered 86 pairs at approximately $0.9958 per pair, creating an initial theoretical edge of approximately 42 bps per pair before any subsequent execution or settlement effects.
 
-This highlighted a broader principle in the system:
+The H4 trade provides a live test of whether structural arbitrage identified from deterministic payoff relationships can be converted into an executable position. The remaining evaluation is focused on realized settlement economics, capital duration, liquidity and execution risk.
 
-A positive arbitrage spread is not necessarily a positive portfolio decision.
-
-For structural arbitrage, the relevant progression is:
-```
-     Pricing Dislocation
-              ↓
-        Post-Fee Edge
-              ↓
-       Executable Size
-              ↓
-       Execution Risk
-              ↓
-     Capital Requirement
-              ↓
-       Opportunity Cost
-              ↓
-Portfolio-Level Expected Return
-```
+#### 1.2. What I've Learnt
 This has changed the research question from:
 ```
 Can the engine find pricing discrepancies?
@@ -52,24 +45,26 @@ Can the engine find pricing discrepancies?
 
 to:
 ```
-
 Can the engine identify discrepancies whose expected realized return
 remains attractive after transaction costs, execution constraints, capital utilization and model uncertainty?
-
 ```
-The main research priorities are now:
-- Probability calibration: establish a genuinely out-of-sample mapping from options-derived risk-neutral signals to physical event probabilities.
-- Tail validation: evaluate calibration specifically in the low-probability regions where the strategy is most likely to trade.
-- Model decomposition: distinguish risk-neutral/physical probability effects from first-passage and volatility-model misspecification.
-- Dislocation testing: measure whether calibrated model-market differences subsequently converge, persist or widen.
-- Arbitrage economics: quantify the gap between theoretical and executable arbitrage through liquidity, fill probability, legging risk, capital duration and opportunity cost.
-- P&L attribution: decompose realized performance into signal, structural arbitrage, fees, spread, slippage, execution and inventory effects.
+
+#### 1.3. Current Research Priorities
+1. Calibrate H1: Build and freeze an out-of-sample mapping from risk-neutral signals to physical probabilities.
+2. Validate the tail: Test calibration specifically in the 0–1%, 1–2%, 2–5% and 5–10% regions where the strategy trades.
+3. Explain calibration error: Separate Q→P effects from volatility and first-passage model misspecification.
+4. Test H2: Measure whether calibrated model-market dislocations subsequently converge, persist or widen.
+5. Quantify H3 / H4 economics: Measure fill probability, legging risk, capital duration, liquidity and realized return on committed capital.
+6. Attribute P&L: Separate signal, arbitrage, spread, fees, slippage, execution and inventory effects.
 
 The project has therefore evolved from building an opportunity scanner into testing a complete systematic trading hypothesis.
 
 The current objective is not to maximize the apparent backtested or short-term live return. 
 
-It is to establish whether each source of edge survives the full chain from market observation → statistical hypothesis → out-of-sample validation → executable trade → portfolio allocation → realized P&L.
+It is to establish whether each source of edge survives the full chain from:
+```
+market observation → statistical hypothesis → out-of-sample validation → executable trade → portfolio allocation → realized P&L.
+```
 
 At the current stage, the evidence supports continuing the research and measurement process, but is insufficient to establish a persistent trading edge.
 
@@ -83,11 +78,10 @@ I separated each strategy into explicit research hypotheses so that the underlyi
 ### 2.1. Probability-Based Relative Value
 #### 2.1.1. Hypothesis 1 - Probability Estimation
 ```
-
 Can an options-implied risk-neutral distribution be transformed into a useful
 estimate of the physical probability of a crypto price touching a specified barrier before expiry?
-
 ```
+
 I first focused on the probability problem rather than immediately looking for trading opportunities.
 
 I extracted information from BTC and ETH option surfaces and used it to estimate risk-neutral touch probabilities. I then evaluated these estimates against realized first-passage events using synthetic contracts.
@@ -109,6 +103,7 @@ The research therefore treats the options-derived probability as:
 Estimated Physical Probability
 ```
 rather than assuming:
+
 ```
 Risk-Neutral Probability = Physical Probability
 ```
@@ -116,10 +111,8 @@ This distinction became an important focus of the subsequent research.
 
 #### 2.1.2. Hypothesis 2 - Market Dislocation
 ```
-
 Does the prediction-market price differ sufficiently from the
 estimated physical probability to create positive expected value after transaction costs?
-
 ```
 
 Once I had established that the options-derived signal contained information about event likelihood, I considered the separate question of whether that information could be converted into a trading opportunity.
@@ -176,10 +169,8 @@ Instead, it tests whether prediction-market prices violate deterministic relatio
 
 #### 2.2.1. Hypothesis 3 - Cross-Market Arbitrage
 ```
-
 Do equivalent prediction-market contracts trade at sufficiently different
 executable prices to create arbitrage opportunities after fees and execution costs?
-
 ```
 
 The scanner searches for contracts across different markets that represent equivalent underlying events.
@@ -235,10 +226,8 @@ rather than treating a displayed pricing discrepancy as automatically realizable
 
 #### 2.2.2. Hypothesis 4 - Vertical Arbitrage
 ```
-
 Do prediction-market contracts at different strikes violate
 the monotonicity relationships implied by their underlying event structure?
-
 ```
 
 For an upward barrier event, touching a higher strike necessarily implies touching every lower strike first.
@@ -364,9 +353,9 @@ The current portfolio contains both probability-based and structural positions.
 These positions depend on the calibrated probability estimate and current executable market price.
 
 #### Structural Arbitrage
-| Asset	| Structure	             | Size	| Entry          |
-|-------|------------------------|------|----------------|
-| ETH   | $5.5k YES + $6k NO     | 	86	| 99.58¢ / pair  |
+| Asset	| Structure	                    | Size	| Entry          |
+|-------|------------------------------------|------|----------------|
+| ETH   | $5.5k Touch YES + $6k Touch NO     | 	86	| 99.58¢ / pair  |
 
 The structural position is evaluated primarily through its payoff relationship, executable liquidation value, remaining capital requirement and opportunity cost.
 
@@ -525,65 +514,38 @@ The next research stage is therefore to determine whether model-market dislocati
 ### 7.3. H3 - Cross-Market Arbitrage Identified a Positive Post-Fee Pricing Dislocation
 The cross-market arbitrage engine identified a live BTC opportunity involving two contracts representing the same underlying event:
 ```
-Market A: “Will Bitcoin reach $150,000 by December 31, 2026?” - NO at approximately $0.977
+Market A: “Will Bitcoin reach $150,000 by December 31, 2026?” — NO at approximately $0.977
 
-Market B: “Will Bitcoin hit $150k by December 31, 2026?” - YES at approximately $0.019
+Market B: “Will Bitcoin hit $150k by December 31, 2026?” — YES at approximately $0.019
 ```
-
 The contracts appeared to represent equivalent payoff conditions. The engine therefore evaluated the complementary combination:
 
-| Asset	| Structure	              | Size	 | Entry          |
-|-------|-------------------------|--------|----------------|
-| BTC   | $150,000 NO + $150k YES | 113.32 | 99.89¢ / pair  |
+| Asset | Structure	                          | Size   | Entry          |
+|-------|-------------------------------------|--------|----------------|
+| BTC   | $150,000 Touch NO + $150k Touch YES | 113.32 | 99.89¢ / pair  |
 
-This produced a theoretical post-fee profit of approximately:
+The observed executable combination had a post-fee cost of approximately $0.9989 per pair, against a $1.00 settlement value:
 ```
-$0.001122 per pair
+Theoretical edge ≈ $0.00112 per pair (~11.2 bps)
 ```
+Approximately 113 pairs were available, implying roughly $0.13 of theoretical profit if both legs could be fully executed at the quoted prices.
 
-The observed opportunity supported the core H3 hypothesis that equivalent prediction-market contracts can temporarily trade at inconsistent executable prices.
+The opportunity supported the core H3 hypothesis: equivalent prediction-market contracts can temporarily trade at inconsistent executable prices.
 
-However, the opportunity also exposed an important distinction between positive unit economics and attractive portfolio economics.
+However, the opportunity also demonstrated why theoretical arbitrage is not automatically an attractive trade. 
 
-The maximum immediately executable size observed by the scanner was approximately 113.32 pairs, implying a theoretical gross profit of approximately $0.127 if both legs could be fully executed at the quoted prices.
+Existing capital was already committed to another structural position, so deploying capital into the new opportunity required considering:
+- executable size and fill probability
+- legging and synchronization risk
+- capital required and time to settlement
+- opportunity cost versus existing positions
 
-At the time of detection, however, capital was already committed to an existing structural arbitrage position. Closing or reallocating that capital would have introduced an opportunity cost that was not justified by the relatively small incremental arbitrage return available from the new opportunity.
-
-I therefore did not treat the detected discrepancy as automatically tradable.
-
-This produced a more complete hierarchy for evaluating structural arbitrage:
+The relevant decision framework is therefore:
 ```
-  Quoted Pricing Dislocation
-               ↓
-   Post-Fee Theoretical Edge
-               ↓
-        Executable Size
-               ↓
-        Execution Risk
-               ↓
-      Capital Requirement
-               ↓
-        Opportunity Cost
-               ↓
-Expected Portfolio-Level Return
+Pricing Dislocation → Post-Fee Edge → Executable Size → Execution Risk → Capital Efficiency → Portfolio Allocation
 ```
 
-The key finding is that an arbitrage opportunity can satisfy the local no-arbitrage condition while still failing the portfolio-level trade-selection criterion.
-
-This is particularly relevant in prediction markets because positions can remain capital-intensive until settlement. A strategy that evaluates only the profit per matched pair can therefore overstate the attractiveness of opportunities by ignoring capital duration and competing uses of balance-sheet capacity.
-
-The H3 research question has consequently evolved from:
-```
-Can equivalent contracts be identified with prices below their guaranteed settlement value?
-```
-
-to:
-
-```
-Can equivalent-contract dislocations be executed at sufficient size and capital efficiency to produce attractive portfolio-level returns?
-```
-
-The current result provides evidence for the first question, while the second remains an open empirical question requiring further measurement of fill probability, capital utilization, holding period, legging risk and realized return on committed capital.
+The current evidence supports the existence of cross-market pricing dislocations. The remaining research question is whether these opportunities can be captured reliably and at sufficient capital efficiency after execution constraints.
 
 ### 7.4. H4 - Structural arbitrage engine identified opportunities arising from relationships between related contracts.
 One example is the vertical relationship between ETH $5,500 and $6,000 touch contracts.
@@ -615,7 +577,7 @@ The practical risks include:
 
 The system therefore treats structural arbitrage signals as candidate opportunities, rather than assuming that every detected theoretical discrepancy represents realizable P&L.
 
-## 9. What I Learned
+## 9. What I Learnt
 The most important lesson from the project is:
 ```
 A signal is not automatically an edge.
