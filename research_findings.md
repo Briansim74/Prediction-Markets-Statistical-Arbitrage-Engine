@@ -204,7 +204,7 @@ Therefore, expected return must be considered alongside:
 This converts position management from a simple profit/loss rule into a marginal capital-allocation problem.
 
 ## 5. Empirical Findings
-### 5.1 H1 - The Probability Signal Contains Information but Is Not Fully Calibrated
+### 5.1. H1 - The Probability Signal Contains Information but Is Not Fully Calibrated
 The first research question was whether an options-implied risk-neutral distribution could provide useful information about the probability of a BTC or ETH price touching a specified barrier before expiry.
 
 I constructed touch probabilities from the BTC and ETH options surfaces and evaluated them against realized first-passage events.
