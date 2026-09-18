@@ -158,7 +158,7 @@ These positions depend on the calibrated probability estimate and current execut
 The structural position is evaluated primarily through its payoff relationship, executable liquidation value, remaining capital requirement and opportunity cost.
 
 #### Live equity / P&L curve
-<img width="700" height="1300" alt="Equity Curve" src="https://raw.githubusercontent.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/main/equity_curve.png"/>
+<img width="700" height="500" alt="Equity Curve" src="https://raw.githubusercontent.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/main/equity_curve.png"/>
 
 The sample is currently too small to infer long-term profitability or statistical significance.
 
@@ -210,10 +210,10 @@ The first research question was whether an options-implied risk-neutral distribu
 I constructed touch probabilities from the BTC and ETH options surfaces and evaluated them against realized first-passage events.
 
 #### BTC model calibration curve
-<img width="400" height="800" alt="BTC_model_calibration" src="https://raw.githubusercontent.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/main/BTC_model_calibration.png"/>
+<img width="400" height="400" alt="BTC_model_calibration" src="https://raw.githubusercontent.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/main/BTC_model_calibration.png"/>
 
 #### ETH model calibration curve
-<img width="400" height="800" alt="ETH_model_calibration" src="https://raw.githubusercontent.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/main/ETH_model_calibration.png"/>
+<img width="400" height="400" alt="ETH_model_calibration" src="https://raw.githubusercontent.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/main/ETH_model_calibration.png"/>
 
 The model showed useful discrimination: higher predicted probabilities generally corresponded to higher realized touch frequencies.
 
@@ -253,7 +253,7 @@ and grouped observations into ten edge buckets.
 I then measured subsequent prediction-market price movement over 1h, 4h, 24h, 72h and 1-week horizons.
 
 #### Convergence Check
-<img width="700" height="1200" alt="edge_vs_move" src="https://raw.githubusercontent.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/main/edge_vs_move.png"/>
+<img width="700" height="400" alt="edge_vs_move" src="https://raw.githubusercontent.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/main/edge_vs_move.png"/>
 
 The current results do not show a stable monotonic relationship between initial edge and subsequent price movement.
 
