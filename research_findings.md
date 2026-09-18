@@ -26,8 +26,30 @@ The research has produced four main findings.
 #### H1 - The probability signal contains information, but is not fully calibrated.
 Options-derived touch probabilities generally preserve the ordering of event likelihood: contracts assigned higher probabilities have tended to realize more frequently. However, predicted probabilities do not consistently match realized frequencies, particularly in regions relevant to trading. The current evidence therefore supports the model as a probability signal, but not as a directly interpretable physical probability.
 
-#### H2 - Model-market dislocations exist, but their subsequent price behavior is not yet clearly predictive.
-The calibrated model frequently differs from executable prediction-market prices, creating measurable model-market dislocations. I tested whether the magnitude and direction of these dislocations predicted subsequent market moves over 1h, 4h, 24h, 72h and 1-week horizons. The relationship was weak and non-monotonic across the tested horizons: larger positive model-market edges did not consistently produce larger subsequent moves in the expected direction. This suggests that model-market disagreement alone is not yet sufficient as a trading signal, and motivates further work on calibration, execution-aware returns and conditional dislocation analysis.
+#### H2 - Model-Market Dislocations Have Not Yet Demonstrated Predictive Convergence
+The probability model frequently produces measurable differences from executable prediction-market prices. I therefore tested whether the magnitude and direction of these model-market dislocations contained information about subsequent prediction-market price movements.
+
+I grouped observations into deciles based on the initial model-market edge and measured subsequent prediction-market price changes over 1h, 4h, 24h, 72h and 1-week horizons.
+
+The current results do not show a clear monotonic relationship between initial edge and subsequent price movement. At the 1h and 4h horizons, average subsequent moves are close to zero across most buckets. At 24h, 72h and 1-week horizons, some positive average movements are observed, but the relationship remains non-monotonic: larger initial positive edges do not consistently produce larger subsequent moves in the expected direction.
+
+This weakens the hypothesis that the raw model-market dislocation can be used directly as a standalone short-horizon predictive signal.
+
+Importantly, this does not establish that the model is uninformative or that the underlying probability-based strategy has no economic value. The test is affected by probability calibration, contract direction, market liquidity, time-to-expiry, volatility regime and the distinction between price movement and executable trading return.
+
+The current conclusion is therefore:
+
+H2 is not yet supported as a simple predictive relationship between raw model-market edge and subsequent prediction-market price movement.
+
+The next stage is to test whether calibrated dislocations have stronger predictive or economic properties, and to evaluate the actual trading outcome after fees, spreads, slippage and execution constraints rather than relying solely on future price movement.
+
+This changes the research question from:
+
+Does a large model-market discrepancy imply a subsequent price move?
+
+to:
+
+After probability calibration and realistic execution costs, does a model-market discrepancy contain economically useful information about the future value of the contract?
 
 #### H3 - Cross-market arbitrage was detected but not deployed.
 The engine identified a live BTC opportunity involving two contracts representing the same $150,000 price-touch event. The complementary position had a post-fee executable cost of approximately $0.9989 against a $1.00 settlement value, implying approximately 11.2 bps of theoretical edge per matched pair. Approximately 113 pairs were available, corresponding to ~$0.13 of theoretical profit. However, existing capital was already committed to another structural position, so the opportunity was not deployed after considering capital utilization and opportunity cost.
@@ -110,57 +132,42 @@ Risk-Neutral Probability = Physical Probability
 This distinction became an important focus of the subsequent research.
 
 #### 2.1.2. Hypothesis 2 - Market Dislocation
+Once I had a probability estimate, I asked a separate question:
 ```
 Does the prediction-market price differ sufficiently from the
-estimated physical probability to create positive expected value after transaction costs?
+model probability to create positive expected value after transaction costs?
 ```
 
-Once I had established that the options-derived signal contained information about event likelihood, I considered the separate question of whether that information could be converted into a trading opportunity.
+For each contract, I defined the raw model-market dislocation as:
+```
+Edge_t = P^P(YES)_t - P_market_t
+```
+A positive value means that the model assigns a higher probability to the YES outcome than the prediction market price implies.
 
-For each contract, I compared the calibrated physical probability:
-```
-P̂_P(YES)
-```
-with the executable prediction-market price.
-```
-P_market(YES)
-```
+A negative value indicates the opposite.
 
-For a YES position:
-```
-EV_YES = P̂_P(YES) - P_market(YES) - Fees - Expected Trading Costs
-```
+The economic motivation is straightforward: if the model probability contains information that is not yet reflected in the prediction-market price, larger positive dislocations should, in principle, be followed by positive repricing of the contract, while negative dislocations should be followed by negative repricing.
 
-and analogously for NO:
-```
-EV_NO = P̂_P(NO) - P_market(NO) - Fees - Expected Trading Costs
-```
-The strategy only considers entering when the estimated expected value exceeds the minimum trading threshold.
+However, a model-market difference is not automatically equivalent to a trading opportunity. The discrepancy can arise from probability-model error, risk premia, liquidity, market microstructure, time-to-expiry or execution constraints.
 
-This creates an important separation between model disagreement and tradable edge.
+I therefore treated this as an empirical prediction test before treating the dislocation as a trading signal.
 
-The system does not trade simply because:
-```
-P̂_P(YES) ≠ P_market(YES)
-```
-Instead, the discrepancy must be sufficiently large to compensate for transaction costs and the uncertainty in the probability estimate.
+Empirical Test
+I ranked observations by their initial model-market edge and divided them into ten approximately equal-sized buckets.
 
-The resulting research pipeline is:
-```
-       Options Market
-              ↓
-  Risk-Neutral Probability
-              ↓
-         Calibration
-              ↓
-Physical Probability Estimate
-              ↓
-   Prediction-Market Price
-              ↓
- Fee-Adjusted Expected Value
-              ↓
-       Trade / No Trade
-```
+For each bucket, I calculated:
+- mean initial model-market edge
+- mean subsequent prediction-market price movement
+- number of observations
+
+I evaluated subsequent movement over:
+- 1 hour
+- 4 hours
+- 24 hours
+- 72 hours
+- 1 week
+
+The objective was to test whether larger initial dislocations were associated with systematically larger subsequent moves in the expected direction.
 
 ### 2.2. Structural Arbitrage
 The second strategy class does not depend on forecasting the probability of the underlying event.
@@ -353,7 +360,7 @@ The current portfolio contains both probability-based and structural positions.
 These positions depend on the calibrated probability estimate and current executable market price.
 
 #### Structural Arbitrage
-| Asset	| Structure	                    | Size	| Entry          |
+| Asset	| Structure	                         | Size	| Entry          |
 |-------|------------------------------------|------|----------------|
 | ETH   | $5.5k Touch YES + $6k Touch NO     | 	86	| 99.58¢ / pair  |
 
@@ -480,36 +487,75 @@ Each transformation introduces potential model risk.
 
 This is likely to be particularly important for far-out-of-the-money barriers, where tail assumptions can have a large impact on estimated touch probabilities.
 
-### 7.2. H2 - Model-Market Dislocations
-The second research question was whether the probability signal identifies sufficiently large differences from prediction-market prices to generate positive expected value after costs.
+## 7.2. H2 - Market Dislocation - Model-Market Dislocations Have Not Yet Demonstrated Predictive Convergence
+The current results do not show a clear monotonic relationship between initial edge and subsequent prediction-market price movement.
 
 #### Convergence Check
 <img width="700" height="1200" alt="edge_vs_move" src="https://github.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/blob/main/edge_vs_move.png"/>
 
+At the 1-hour horizon, mean subsequent moves are very small across the buckets, ranging from approximately -2.0 bps to +5.2 bps.
 
-The strategy therefore evaluates:
+At 4 hours, the relationship remains weak and non-monotonic, with most bucket-level movements remaining close to zero.
+
+At 24 hours, several buckets show positive average movement, but the magnitude of the move does not increase consistently with the initial edge.
+
+The same pattern is visible at 72 hours and 1 week. Some positive average movements emerge, but the largest initial positive-edge bucket does not consistently produce the largest subsequent positive move.
+
+The important result is therefore not simply the sign of the average movement.
+
+It is the absence of a stable monotonic relationship:
 ```
-Calibrated Probability
-        ↓
-Executable Market Price
-        ↓
-Fee-Adjusted EV
-        ↓
-Trade / No Trade
+Large Edge ⇏ Large Subsequent Move
+```
+within the current sample.
+
+#### 7.2.1. Interpretation
+The current evidence does not support using the raw model-market edge as a standalone linear predictor of subsequent prediction-market price movement.
+
+This is an important distinction from the original trading hypothesis.
+
+The model can produce economically large differences from market prices without those differences necessarily representing immediate or predictable market mispricing.
+
+Several mechanisms could explain the observed behaviour:
+- imperfect probability calibration;
+- risk-neutral versus physical probability differences;
+- liquidity and market-making effects;
+- differences in time-to-expiry;
+- volatility-regime dependence;
+- prediction-market microstructure;
+- persistence rather than immediate convergence;
+- contract-specific differences;
+- bid/ask and execution effects.
+
+The current test therefore provides evidence against a simple interpretation of:
+```
+Model Probability - Market Price
+```
+as a direct short-horizon alpha signal.
+
+It does not, by itself, establish that probability-based trading has no economic value. In particular, the test uses raw model probabilities and subsequent price movement rather than a fully calibrated probability estimate and realized executable P&L.
+
+#### 7.2.3. Research Conclusion
+The current status of H2 is therefore:
+```
+The raw model-market dislocation is measurable, but its relationship with subsequent prediction-market price movement is currently weak and non-monotonic across the tested horizons.
 ```
 
-A persistent model-market difference is not automatically interpreted as prediction-market mispricing.
+This means the next research stage should not simply increase the trading threshold or assume that larger discrepancies represent stronger alpha.
 
-Possible explanations include:
-- probability-model misspecification
-- risk-neutral versus physical probability differences
-- risk premia
-- prediction-market liquidity
-- market-maker compensation
-- execution costs
-- differences in contract interpretation
-
-The next research stage is therefore to determine whether model-market dislocations remain economically meaningful after probability calibration and out-of-sample validation.
+Instead, I need to determine whether the observed dislocations become more informative after:
+```
+   Risk Neutral Signal
+            ↓
+ Probability Calibration
+            ↓
+ Contract Normalization
+            ↓
+   Market Dislocation
+            ↓
+Execution Adjusted Return
+```
+The objective is to establish whether the dislocation represents genuine relative value, model error, or a combination of market-structure effects.
 
 ### 7.3. H3 - Cross-Market Arbitrage Identified a Positive Post-Fee Pricing Dislocation
 The cross-market arbitrage engine identified a live BTC opportunity involving two contracts representing the same underlying event:
@@ -542,7 +588,17 @@ Existing capital was already committed to another structural position, so deploy
 
 The relevant decision framework is therefore:
 ```
-Pricing Dislocation → Post-Fee Edge → Executable Size → Execution Risk → Capital Efficiency → Portfolio Allocation
+ Pricing Dislocation
+          ↓
+    Post-Fee Edge
+          ↓
+   Executable Size
+          ↓
+   Execution Risk
+          ↓
+  Capital Efficiency
+          ↓
+ Portfolio Allocation
 ```
 
 The current evidence supports the existence of cross-market pricing dislocations. The remaining research question is whether these opportunities can be captured reliably and at sufficient capital efficiency after execution constraints.
@@ -661,10 +717,10 @@ with appropriate confidence intervals and sufficient sample sizes.
 #### 11.1. Out-of-Sample Calibration
 The immediate priority is to construct an explicit calibration layer:
 ```
-Risk-Neutral Probability
-          ↓
-Calibration Function
-          ↓
+  Risk-Neutral Probability
+              ↓
+     Calibration Function
+              ↓
 Estimated Physical Probability
 ```
 
@@ -717,28 +773,145 @@ The objective is not to add complexity for its own sake.
 
 Each modelling change should be evaluated based on out-of-sample improvement.
 
-#### 11.4. Test Whether Dislocations Converge
-After calibration, I want to measure the subsequent behavior of model-market discrepancies.
+#### 11.4. Determine Whether Model-Market Dislocations Have Economic Predictive Value
+The current H2 results show that raw model-market dislocations do not have a clear monotonic relationship with subsequent prediction-market price movements.
 
-For each opportunity:
+The next step is therefore to determine whether this result is caused by the probability signal itself, by the way the test is constructed, or by market microstructure.
+
+#### 11.4.1. Normalize the Direction of the Signal
+The first priority is to express every observation in a consistent economic direction.
+
+For YES contracts:
 ```
-Calibrated Probability
-          ↓
-    Market Price
-          ↓
-Observed Future Price
+Edge_t = P^P(YES)_t - P_YES_t
+```
+For NO contracts, the corresponding edge should be expressed in terms of the NO probability and NO executable price.
+
+The future return should then be measured in the same directional convention.
+
+This prevents YES and NO contracts from being combined in a way that mechanically obscures the relationship.
+
+#### 11.4.2. Test Edge Convergence Directly
+Rather than measuring only:
+```
+P_t + h - P_t
 ```
 
-I want to measure whether the discrepancy:
-- converges
-- persists
-- widens
+I will measure the evolution of the model-market discrepancy itself:
+```
+Edge_t + h - Edge_t
+```
+This distinguishes two different hypotheses:
 
-behaves differently across market regimes.
+#### Price prediction
+```
+     Edge_t
+        ↓
+Future Price Move
+```
+versus:
 
-I would evaluate multiple holding horizons rather than assuming immediate convergence.
+#### Relative-value convergence
+```
+     Edge_t
+        ↓
+Smaller Future Edge
+```
+The second is more directly aligned with the relative-value hypothesis.
 
-This should help distinguish genuine relative-value opportunities from persistent differences caused by model assumptions or market structure.
+A large positive edge should be followed by a reduction in the positive discrepancy if the market is converging toward the model estimate.
+
+#### 11.4.3. Re-run the Analysis After Probability Calibration
+The current analysis uses the raw model probability.
+
+The next version should use:
+```
+    P_Q
+     ↓
+Calibration
+     ↓
+    P^P
+```
+and then calculate:
+```
+Calibrated Edge = P^P - P_market
+```
+This will test whether the weak H2 relationship is partly caused by systematic probability bias identified in H1.
+
+#### 11.4.4. Measure Trading Returns Rather Than Price Movement Alone
+Future price movement is only a proxy for trading performance.
+
+For each hypothetical entry, I will calculate the actual return available at the executable bid/ask:
+```
+Return = Exit Value - Entry Cost - Fees - Slippage
+```
+
+This allows the research to distinguish:
+- statistical association
+- theoretical convergence
+- executable return
+- realized trading P&L
+
+The analysis should also incorporate holding periods and liquidation conditions rather than assuming that every position is held for a fixed horizon.
+
+#### 11.4.5. Test Monotonicity and Statistical Significance
+Rather than relying only on bucket averages, I will test whether there is a statistically significant relationship between initial edge and subsequent outcome.
+
+Potential tests include:
+rank correlation between initial edge and future return;
+regression of future return on initial edge;
+monotonicity across edge buckets;
+confidence intervals for bucket returns;
+bootstrap confidence intervals;
+significance after accounting for repeated observations.
+
+The objective is to determine whether the observed relationship is distinguishable from sampling noise.
+
+#### 11.4.6. Control for Market Structure
+The relationship should also be conditioned on variables that may explain the apparent dislocation independently of predictive information.
+
+Relevant controls include:
+- time to expiry
+- current underlying price relative to strike
+- implied volatility
+- volatility regime
+- prediction-market spread
+- order-book depth
+- contract liquidity
+- market age
+- BTC versus ETH
+- touch versus expiry contracts
+
+This will help distinguish probability-model information from predictable market-microstructure effects.
+
+#### 11.4.7. Test Conditional Dislocations
+The current aggregate result may hide subsets where the signal behaves differently.
+
+I will therefore test whether the relationship varies across:
+- probability ranges
+- volatility regimes
+- time-to-expiry buckets
+- near versus far strikes
+- BTC versus ETH
+- touch versus expiry contracts
+- liquid versus illiquid markets
+
+The objective is not to search indefinitely for a profitable subgroup, but to establish whether there is a pre-specified economic reason for any observed conditional relationship.
+
+#### 11.4.8. Freeze the Research Specification Before Out-of-Sample Testing
+Once the signal definition, calibration method, return definition and conditioning variables have been selected, the specification should be frozen before evaluating a genuinely out-of-sample period.
+
+The final test should answer:
+```
+   Calibrated Edge
+          ↓
+  Executable Entry
+          ↓
+Future Economic Return
+```
+If the relationship remains weak after calibration, execution costs and out-of-sample testing, that would be evidence against H2 as a standalone source of trading edge.
+
+If a relationship survives these tests, the next question would be whether it is sufficiently stable and economically large to justify deployment.
 
 #### 11.5. Improve P&L Attribution
 The live system should attribute P&L across separate sources:
