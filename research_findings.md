@@ -2,9 +2,13 @@
 Research Findings, Live Results & Next Steps - 17 September 2026
 
 ## 1. Executive Summary
-I built and deployed a live systematic trading engine for BTC and ETH prediction markets, with the objective of testing whether pricing inefficiencies can be identified, quantified and executed after realistic transaction costs and portfolio constraints.
+#### Strategy Status
+The engine has been live since 14 August 2026. The current live sample contains 4 strategy trades, 8 executed orders and 8 fills, with +0.08% net P&L and -1.33% maximum drawdown. The live sample is too small to draw conclusions about persistent profitability; its primary value is validating the research and execution pipeline in live markets.
 
-The system investigates two distinct sources of edge:
+### 1.1. Objective
+I built and deployed a live systematic trading engine for BTC and ETH prediction markets to test whether pricing inefficiencies can be identified and converted into executable trades after fees, liquidity, execution constraints and portfolio risk.
+
+The research investigates two sources of edge:
 #### a. Probability-based relative value
 ```
 Estimating event probabilities from BTC and ETH options markets and
@@ -18,259 +22,68 @@ contracts and across contracts whose payoffs impose monotonicity or other no-arb
 ```
 The research and trading architecture deliberately separates signal generation from execution. Opportunities are evaluated using executable bid/ask prices, fees, liquidity, position sizing, inventory constraints and portfolio-level capital allocation rather than relying on midpoint prices or theoretical spreads alone.
 
-The engine has been live since 14 August 2026. The current live sample contains 4 strategy trades, 8 executed orders and 8 fills. Live P&L remains a very small sample and is therefore not treated as evidence of a persistent trading edge. The current results are primarily useful as validation of the research, execution and portfolio-management pipeline.
-
-### 1.1. Key Research Findings
-The research has produced four main findings.
-
+### 1.2. Key Research Findings
 #### H1 - The probability signal contains information, but is not fully calibrated.
-Options-derived touch probabilities generally preserve the ordering of event likelihood: contracts assigned higher probabilities have tended to realize more frequently. However, predicted probabilities do not consistently match realized frequencies, particularly in regions relevant to trading. The current evidence therefore supports the model as a probability signal, but not as a directly interpretable physical probability.
+Options-derived touch probabilities generally preserve the ordering of event likelihood: higher predicted probabilities have tended to correspond to higher realized touch frequencies. However, the probability levels are not sufficiently calibrated to be interpreted directly as physical probabilities.
 
-#### H2 - Model-Market Dislocations Have Not Yet Demonstrated Predictive Convergence
-The probability model frequently produces measurable differences from executable prediction-market prices. I therefore tested whether the magnitude and direction of these model-market dislocations contained information about subsequent prediction-market price movements.
+This led me to separate signal quality from probability calibration and treat the options-derived output as a risk-neutral-derived signal requiring calibration before being used for expected-value calculations.
 
-I grouped observations into deciles based on the initial model-market edge and measured subsequent prediction-market price changes over 1h, 4h, 24h, 72h and 1-week horizons.
+#### H2 - Raw model-market dislocations have not demonstrated a stable predictive relationship.
+I tested whether the magnitude of the model-market edge predicted subsequent prediction-market price movements over 1h, 4h, 24h, 72h and 1-week horizons.
 
-The current results do not show a clear monotonic relationship between initial edge and subsequent price movement. At the 1h and 4h horizons, average subsequent moves are close to zero across most buckets. At 24h, 72h and 1-week horizons, some positive average movements are observed, but the relationship remains non-monotonic: larger initial positive edges do not consistently produce larger subsequent moves in the expected direction.
+The relationship was weak and non-monotonic across the tested horizons. Larger initial edges did not consistently produce larger subsequent moves in the expected direction.
 
-This weakens the hypothesis that the raw model-market dislocation can be used directly as a standalone short-horizon predictive signal.
+I therefore do not currently treat raw model-market disagreement as standalone alpha. The next test is whether calibrated dislocations converge and generate positive executable returns after fees, spreads and slippage.
 
-Importantly, this does not establish that the model is uninformative or that the underlying probability-based strategy has no economic value. The test is affected by probability calibration, contract direction, market liquidity, time-to-expiry, volatility regime and the distinction between price movement and executable trading return.
+#### H3 - Cross-market arbitrage opportunities exist, but capital and execution constraints matter.
+The engine identified a live BTC opportunity across two contracts representing the same $150,000 touch event. The post-fee executable cost was approximately $0.9989 against a $1.00 settlement value, implying approximately 11.2 bps theoretical edge across approximately 113 available pairs.
 
-The current conclusion is therefore:
-
-H2 is not yet supported as a simple predictive relationship between raw model-market edge and subsequent prediction-market price movement.
-
-The next stage is to test whether calibrated dislocations have stronger predictive or economic properties, and to evaluate the actual trading outcome after fees, spreads, slippage and execution constraints rather than relying solely on future price movement.
-
-This changes the research question from:
-
-Does a large model-market discrepancy imply a subsequent price move?
-
-to:
-
-After probability calibration and realistic execution costs, does a model-market discrepancy contain economically useful information about the future value of the contract?
-
-#### H3 - Cross-market arbitrage was detected but not deployed.
-The engine identified a live BTC opportunity involving two contracts representing the same $150,000 price-touch event. The complementary position had a post-fee executable cost of approximately $0.9989 against a $1.00 settlement value, implying approximately 11.2 bps of theoretical edge per matched pair. Approximately 113 pairs were available, corresponding to ~$0.13 of theoretical profit. However, existing capital was already committed to another structural position, so the opportunity was not deployed after considering capital utilization and opportunity cost.
+The opportunity was not deployed because capital was already committed elsewhere. This highlighted that theoretical arbitrage must be evaluated against execution probability, capital utilization and opportunity cost, not simply the quoted spread.
 
 #### H4 - Vertical arbitrage produced a live position.
-The engine identified a pricing inconsistency between ETH $5,500 and $6,000 touch contracts. Because touching $6,000 necessarily implies touching $5,500, the combination of YES $5,500 + NO $6,000 has a minimum settlement value of $1 per matched pair, subject to contract definitions and settlement rules. The strategy entered 86 pairs at approximately $0.9958 per pair, creating an initial theoretical edge of approximately 42 bps per pair before any subsequent execution or settlement effects.
+The engine identified a pricing inconsistency between ETH $5,500 and $6,000 touch contracts. Since touching $6,000 necessarily implies touching $5,500, YES $5,500 + NO $6,000 has a minimum settlement value of $1, subject to contract definitions and settlement rules.
 
-The H4 trade provides a live test of whether structural arbitrage identified from deterministic payoff relationships can be converted into an executable position. The remaining evaluation is focused on realized settlement economics, capital duration, liquidity and execution risk.
+The strategy entered 86 pairs at approximately $0.9958, creating an ex-ante theoretical edge of approximately 42 bps per pair. The remaining research is focused on realized settlement economics, liquidity, capital duration and execution risk.
 
-#### 1.2. What I've Learnt
-This has changed the research question from:
+### 1.3. What I Learned
+The main lesson is:
 ```
-Can the engine find pricing discrepancies?
-```
-
-to:
-```
-Can the engine identify discrepancies whose expected realized return
-remains attractive after transaction costs, execution constraints, capital utilization and model uncertainty?
+A signal is not automatically an edge.
 ```
 
-#### 1.3. Current Research Priorities
-1. Calibrate H1: Build and freeze an out-of-sample mapping from risk-neutral signals to physical probabilities.
-2. Validate the tail: Test calibration specifically in the 0–1%, 1–2%, 2–5% and 5–10% regions where the strategy trades.
-3. Explain calibration error: Separate Q→P effects from volatility and first-passage model misspecification.
-4. Test H2: Measure whether calibrated model-market dislocations subsequently converge, persist or widen.
-5. Quantify H3 / H4 economics: Measure fill probability, legging risk, capital duration, liquidity and realized return on committed capital.
-6. Attribute P&L: Separate signal, arbitrage, spread, fees, slippage, execution and inventory effects.
+The project initially focused on whether I could identify pricing discrepancies. Live deployment shifted the research question toward whether those discrepancies survive the full trading process.
 
-The project has therefore evolved from building an opportunity scanner into testing a complete systematic trading hypothesis.
+I now separate the strategy into three sources of uncertainty:
+- Model: Is the probability estimate correct?
+- Market: Is the price difference genuine relative value or explained by risk premia, liquidity or market structure?
+- Execution: Can the theoretical edge actually be captured at the required price and size?
 
-The current objective is not to maximize the apparent backtested or short-term live return. 
+This has made the research more falsifiable and changed how I evaluate opportunities.
 
-It is to establish whether each source of edge survives the full chain from:
+### 1.4. Current Research Priorities
+1. Calibrate the probability signal
+2. Re-test H2 out of sample
+3. Improve structural arbitrage execution-realization modelling
+4. Improve P&L attribution
+5. Establish deployment criteria
+
+The objective is not to maximize the current backtest or small live P&L sample. It is to establish whether each source of edge survives the full research chain:
 ```
-market observation → statistical hypothesis → out-of-sample validation → executable trade → portfolio allocation → realized P&L.
+       Hypothesis
+            ↓
+       Measurement
+            ↓
+Out-of-Sample Validation
+            ↓
+        Execution
+            ↓
+           Risk
+            ↓
+       Realized P&L
 ```
-
-At the current stage, the evidence supports continuing the research and measurement process, but is insufficient to establish a persistent trading edge.
 
 ## 2. Research Objectives and Hypotheses
-The project investigates two distinct sources of trading edge in crypto prediction markets:
-- probability-based relative value
-- structural arbitrage
-
-I separated each strategy into explicit research hypotheses so that the underlying assumptions could be tested independently.
-
-### 2.1. Probability-Based Relative Value
-#### 2.1.1. Hypothesis 1 - Probability Estimation
-```
-Can an options-implied risk-neutral distribution be transformed into a useful
-estimate of the physical probability of a crypto price touching a specified barrier before expiry?
-```
-
-I first focused on the probability problem rather than immediately looking for trading opportunities.
-
-I extracted information from BTC and ETH option surfaces and used it to estimate risk-neutral touch probabilities. I then evaluated these estimates against realized first-passage events using synthetic contracts.
-
-The initial calibration analysis showed that the model contained useful information about relative event likelihood: higher predicted probabilities generally corresponded to higher realized touch frequencies.
-
-However, the raw probabilities were not perfectly calibrated.
-
-This led me to distinguish between ranking power and probability calibration. The model output appears useful as a probability signal, but it cannot automatically be interpreted as the true physical probability.
-
-The research therefore treats the options-derived probability as:
-```
-  Risk-Neutral Probability
-              ↓
-      Probability Signal
-              ↓
-         Calibration
-              ↓
-Estimated Physical Probability
-```
-rather than assuming:
-
-```
-Risk-Neutral Probability = Physical Probability
-```
-This distinction became an important focus of the subsequent research.
-
-#### 2.1.2. Hypothesis 2 - Market Dislocation
-Once I had a probability estimate, I asked a separate question:
-```
-Does the prediction-market price differ sufficiently from the
-model probability to create positive expected value after transaction costs?
-```
-
-For each contract, I defined the raw model-market dislocation as:
-```
-Edge_t = P^P(YES)_t - P_market_t
-```
-A positive value means that the model assigns a higher probability to the YES outcome than the prediction market price implies.
-
-A negative value indicates the opposite.
-
-The economic motivation is straightforward: if the model probability contains information that is not yet reflected in the prediction-market price, larger positive dislocations should, in principle, be followed by positive repricing of the contract, while negative dislocations should be followed by negative repricing.
-
-However, a model-market difference is not automatically equivalent to a trading opportunity. The discrepancy can arise from probability-model error, risk premia, liquidity, market microstructure, time-to-expiry or execution constraints.
-
-I therefore treated this as an empirical prediction test before treating the dislocation as a trading signal.
-
-Empirical Test
-I ranked observations by their initial model-market edge and divided them into ten approximately equal-sized buckets.
-
-For each bucket, I calculated:
-- mean initial model-market edge
-- mean subsequent prediction-market price movement
-- number of observations
-
-I evaluated subsequent movement over:
-- 1 hour
-- 4 hours
-- 24 hours
-- 72 hours
-- 1 week
-
-The objective was to test whether larger initial dislocations were associated with systematically larger subsequent moves in the expected direction.
-
-### 2.2. Structural Arbitrage
-The second strategy class does not depend on forecasting the probability of the underlying event.
-
-Instead, it tests whether prediction-market prices violate deterministic relationships implied by contract definitions and payoff structures.
-
-#### 2.2.1. Hypothesis 3 - Cross-Market Arbitrage
-```
-Do equivalent prediction-market contracts trade at sufficiently different
-executable prices to create arbitrage opportunities after fees and execution costs?
-```
-
-The scanner searches for contracts across different markets that represent equivalent underlying events.
-
-If two contracts have equivalent payoffs, their complementary YES/NO combinations should satisfy a no-arbitrage relationship.
-
-For example:
-```
-BUY YES on Market A + BUY NO on Market B
-```
-
-If the two contracts are genuinely equivalent and the combined executable cost is less than the guaranteed settlement value:
-```
-Total Executable Cost < $1
-```
-
-then the theoretical minimum profit is:
-```
-Theoretical Profit = Guaranteed Settlement Value − Total Executable Cost
-```
-
-The scanner evaluates both directions:
-```
-YES(A) + NO(B)
-
-YES(B) + NO(A)
-```
-after incorporating applicable trading fees.
-
-The key research question, however, is not whether a theoretical price inequality exists.
-
-It is whether the inequality remains executable after accounting for:
-- available liquidity
-- order-book depth
-- partial fills
-- legging risk
-- stale quotes
-- execution synchronization
-- transaction costs
-- capital constraints
-- contract equivalence and settlement rules.
-
-Therefore, the hypothesis distinguishes:
-```
-Theoretical Arbitrage
-        ↓
-Executable Arbitrage
-        ↓
-Realized Profit
-```
-
-rather than treating a displayed pricing discrepancy as automatically realizable P&L.
-
-#### 2.2.2. Hypothesis 4 - Vertical Arbitrage
-```
-Do prediction-market contracts at different strikes violate
-the monotonicity relationships implied by their underlying event structure?
-```
-
-For an upward barrier event, touching a higher strike necessarily implies touching every lower strike first.
-
-Therefore, for:
-```
-K_lower < K_higher
-```
-
-the event probabilities must satisfy:
-```
-P(touch K_lower) ≥ P(touch K_higher)
-```
-
-This creates a structural relationship between the corresponding prediction-market contracts.
-
-For example:
-```
-BUY YES $5,500 + BUY NO $6,000
-```
-If touching $6,000 necessarily implies touching $5,500, the combination has a minimum settlement value of $1 per matched pair, subject to the exact contract definitions and settlement rules.
-
-The scanner therefore searches for situations where:
-```
-YES(K_lower) + NO(K_higher) < $1
-```
-after fees and at executable prices.
-
-For downward barriers, the relationship is reversed. The scanner applies the corresponding payoff inequality to identify violations in the opposite direction.
-
-The strategy effectively treats the set of related prediction-market contracts as a discrete option-like surface and searches for violations of monotonicity and other no-arbitrage constraints.
-
-As with cross-market arbitrage, the research distinguishes between the theoretical payoff relationship and the ability to execute the required legs at sufficient size.
-
-## 3. Strategy Architecture
-The four hypotheses are implemented through two strategy components.
+I separated the strategy into four hypotheses so that the underlying assumptions could be tested independently.
 
 ```
                  Trading Edge
@@ -297,24 +110,69 @@ Estimation  Dislocation   Market     Arbitrage
                       ↓
                   Execution
                       ↓
-             Inventory Management
-                      ↓
-             Portfolio Accounting
+                     Risk
                       ↓
                 Realized P&L
 ```
-The separation is deliberate.
 
-| Hypothesis | Strategy                   | Source of Edge                             | Primary Risk                              |
-|------------|----------------------------|--------------------------------------------|-------------------------------------------|
-| H1         | Probability Relative Value | Options information → event probability	   | Model and calibration error               |
-| H2         | Probability Relative Value	| Model probability vs market price	         | Mispricing vs. model/risk-premium effects |
-| H3         | Structural arbitrage	      | Equivalent-contract pricing inconsistency	 | Execution, liquidity and settlement	     | 
-| H4         | Structural arbitrage	      | Strike/payoff relationships                | Execution / liquidity                     |
+| Hypothesis | Strategy                   | Question                                                                  | Primary Risk                                |
+|------------|----------------------------|---------------------------------------------------------------------------|---------------------------------------------|
+| H1         | Probability Relative Value | Can options information provide useful estimates of event probabilities?  | Model and calibration error                 |
+| H2         | Probability Relative Value	| Do model-market dislocations contain economically useful information?	    | Mispricing vs. model / risk-premium effects |
+| H3         | Structural arbitrage	      | Do equivalent contracts trade at inconsistent executable prices?	        | Execution, liquidity and settlement	        | 
+| H4         | Structural arbitrage	      | Do related contracts violate payoff-implied monotonicity?                 | Execution / liquidity                       |
 
-The probability-based strategy is exposed primarily to probability-model error, while structural arbitrage is exposed primarily to execution, liquidity and settlement risk.
+This separation allows each source of edge to be evaluated independently rather than treating the overall strategy as a single alpha signal.
 
-This decomposition also makes the research process more falsifiable: each hypothesis can be tested independently rather than treating the overall strategy as a single source of alpha.
+## 3. Current Portfolio & Live Trading Results
+
+```
+Live since:             2026-08-14
+Strategy trades:        4
+Executed orders:        8
+Fills:                  8
+Net P&L:                +0.08%
+Max Drawdown:           -1.33%
+```
+
+A strategy trade represents one independent trading opportunity; multi-leg arbitrage positions are counted as one strategy trade, with each contract treated as a separate execution leg.
+
+These results are from live trading and are not backtested. The live sample is too small to infer persistent profitability. Its primary purpose is to test whether the research assumptions survive executable prices, actual fills, fees, inventory and capital constraints.
+
+The current portfolio contains both probability-based and structural positions.
+
+#### Probability Relative Value
+| Asset	| Contract	  | Outcome | Size	| Entry  |
+|-------|-------------|---------|-------|--------|
+| BTC	  | Touch $200k | NO	    | 4.87	| 98.23¢ |
+| ETH	  | Touch $4.5k | NO	    | 4.95	| 96.27¢ |
+| ETH	  | Touch $5.5k | NO	    | 4.91	| 97.11¢ |
+
+These positions depend on the calibrated probability estimate and current executable market price.
+
+#### Structural Arbitrage
+| Asset	| Structure	                         | Size	| Entry          |
+|-------|------------------------------------|------|----------------|
+| ETH   | $5.5k Touch YES + $6k Touch NO     | 	86	| 99.58¢ / pair  |
+
+The structural position is evaluated primarily through its payoff relationship, executable liquidation value, remaining capital requirement and opportunity cost.
+
+#### Live equity / P&L curve
+<img width="700" height="1300" alt="Equity Curve" src="https://github.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/blob/main/equity_curve.png"/>
+
+The sample is currently too small to infer long-term profitability or statistical significance.
+
+I therefore do not interpret the current P&L as evidence either for or against a persistent trading edge.
+
+Instead, live deployment has provided a test of whether the research assumptions survive contact with:
+- executable prices
+- actual fills
+- fees
+- inventory
+- capital constraints
+- order management
+- portfolio accounting
+- real-time market conditions
 
 ## 4. Dynamic Capital Allocation
 I treat open positions as dynamic capital allocations rather than static trades.
@@ -323,10 +181,8 @@ Once a position has been entered, the entry price is no longer the primary decis
 
 The relevant question becomes:
 ```
-
 Given the information available today, is holding the position
 more valuable than liquidating it and redeploying the capital elsewhere?
-
 ```
 
 Conceptually:
@@ -347,57 +203,11 @@ Therefore, expected return must be considered alongside:
 
 This converts position management from a simple profit/loss rule into a marginal capital-allocation problem.
 
-## 5. Current Portfolio
-The current portfolio contains both probability-based and structural positions.
+## 5. Empirical Findings
+### 5.1 H1 - The Probability Signal Contains Information but Is Not Fully Calibrated
+The first research question was whether an options-implied risk-neutral distribution could provide useful information about the probability of a BTC or ETH price touching a specified barrier before expiry.
 
-#### Probability Relative Value
-| Asset	| Contract	  | Outcome | Size	| Entry  |
-|-------|-------------|---------|-------|--------|
-| BTC	  | Touch $200k | NO	    | 4.87	| 98.23¢ |
-| ETH	  | Touch $4.5k | NO	    | 4.95	| 96.27¢ |
-| ETH	  | Touch $5.5k | NO	    | 4.91	| 97.11¢ |
-
-These positions depend on the calibrated probability estimate and current executable market price.
-
-#### Structural Arbitrage
-| Asset	| Structure	                         | Size	| Entry          |
-|-------|------------------------------------|------|----------------|
-| ETH   | $5.5k Touch YES + $6k Touch NO     | 	86	| 99.58¢ / pair  |
-
-The structural position is evaluated primarily through its payoff relationship, executable liquidation value, remaining capital requirement and opportunity cost.
-
-## 6. Live Trading Results
-```
-Live since:             2026-08-14
-Strategy trades:        4
-Executed orders:        8
-Fills:                  8
-Net P&L:                +0.08%
-Max Drawdown:           -1.33%
-```
-
-These results are from live trading and are not backtested.
-
-#### Live equity / P&L curve
-<img width="700" height="1300" alt="Equity Curve" src="https://github.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/blob/main/equity_curve.png"/>
-
-The sample is currently too small to infer long-term profitability or statistical significance.
-
-I therefore do not interpret the current P&L as evidence either for or against a persistent trading edge.
-
-Instead, live deployment has provided a test of whether the research assumptions survive contact with:
-- executable prices
-- actual fills
-- fees
-- inventory
-- capital constraints
-- order management
-- portfolio accounting
-- real-time market conditions
-
-## 7. Empirical Findings
-### 7.1 H1 - The Probability Signal Contains Information but Is Not Fully Calibrated
-I tested the options-derived touch probabilities against realized first-passage events by grouping predictions into probability buckets and comparing average predicted probability with realized touch frequency.
+I constructed touch probabilities from the BTC and ETH options surfaces and evaluated them against realized first-passage events.
 
 #### BTC model calibration curve
 <img width="400" height="800" alt="BTC_model_calibration" src="https://github.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/blob/main/BTC_model_calibration.png"/>
@@ -405,21 +215,11 @@ I tested the options-derived touch probabilities against realized first-passage 
 #### ETH model calibration curve
 <img width="400" height="800" alt="ETH_model_calibration" src="https://github.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/blob/main/ETH_model_calibration.png"/>
 
-The results indicate that higher predicted probabilities generally correspond to higher realized event frequencies.
+The model showed useful discrimination: higher predicted probabilities generally corresponded to higher realized touch frequencies.
 
-This suggests that the model contains useful information about relative event likelihood.
+However, the probabilities were not fully calibrated. For example, BTC predictions around 85% corresponded to approximately 78% realized frequency, while ETH predictions around 65% corresponded to approximately 55%.
 
-However, the absolute probability levels are not fully calibrated.
-
-For example:
-```
-BTC predictions around 85% corresponded to approximately 78% realized touch frequency;
-
-ETH predictions around 65% corresponded to approximately 55% realized touch frequency.
-```
-
-The important distinction is therefore:
-
+This distinction is important:
 #### Discrimination
 ```
 Can the model distinguish more likely events from less likely events?
@@ -430,134 +230,56 @@ vs.
 ```
 Does a predicted probability correspond to the correct empirical frequency?
 ```
-The current evidence is more supportive of the first property than the second.
+The current evidence is more supportive of the former than the latter.
 
-This matters directly for trading because a model can rank opportunities effectively while still producing biased estimates of expected value.
+The main potential sources of calibration error are:
+- risk-neutral versus physical probability
+- volatility-surface assumptions
+- first-passage model misspecification
+- stochastic volatility and jumps
+- tail behaviour
 
-#### 7.1.1. Why the Probability Model May Be Miscalibrated
-I do not currently attribute the observed calibration error to a single cause.
+The key research change was therefore to treat the options-derived probability as a probability signal, rather than assuming it is already a calibrated physical probability.
 
-Several mechanisms are plausible.
+### 5.2. H2 - Market Dislocation
+Once I had a probability signal, I asked whether the difference between the model and prediction-market price contained information about future market behaviour.
 
-#### 7.1.2. Risk-Neutral vs Physical Probability
-Options markets provide information under the risk-neutral measure Q, whereas realized BTC and ETH paths occur under the physical measure P.
-
-Therefore:
+I defined:
 ```
-P_Q(touch) ≠ P_P(touch)
+Edge_t = P^_t - P_market_t
 ```
-in general.
+and grouped observations into ten edge buckets.
 
-The options-derived probability should therefore initially be interpreted as a risk-neutral-derived trading signal, rather than assumed to be an unbiased physical probability.
-
-The calibration results alone are not sufficient to determine how much of the observed error comes from this distinction.
-
-#### 7.1.3. Model Misspecification
-The conversion from an options surface into a touch probability introduces additional assumptions.
-
-A simplified diffusion model may not fully capture:
-- volatility clustering
-- stochastic volatility
-- jumps
-- fat tails
-- changing volatility regimes
-- volatility skew
-- volatility term structure
-
-These effects are particularly relevant for touch events because they are path-dependent.
-
-A model can therefore produce a reasonable terminal distribution while still generating inaccurate first-passage probabilities.
-
-#### 7.1.4. Surface-to-Touch Transformation
-The model does not directly observe a traded market probability for touching a barrier.
-
-Instead, it performs a sequence of transformations:
-```
-      Option Prices
-            ↓
-Implied Volatility Surface
-            ↓
-       Distribution
-            ↓
-  Dynamic Assumptions
-            ↓
-First-Passage Probability
-```
-Each transformation introduces potential model risk.
-
-This is likely to be particularly important for far-out-of-the-money barriers, where tail assumptions can have a large impact on estimated touch probabilities.
-
-## 7.2. H2 - Market Dislocation - Model-Market Dislocations Have Not Yet Demonstrated Predictive Convergence
-The current results do not show a clear monotonic relationship between initial edge and subsequent prediction-market price movement.
+I then measured subsequent prediction-market price movement over 1h, 4h, 24h, 72h and 1-week horizons.
 
 #### Convergence Check
 <img width="700" height="1200" alt="edge_vs_move" src="https://github.com/Briansim74/Prediction-Markets-Statistical-Arbitrage-Engine/blob/main/edge_vs_move.png"/>
 
-At the 1-hour horizon, mean subsequent moves are very small across the buckets, ranging from approximately -2.0 bps to +5.2 bps.
+The current results do not show a stable monotonic relationship between initial edge and subsequent price movement.
 
-At 4 hours, the relationship remains weak and non-monotonic, with most bucket-level movements remaining close to zero.
+At shorter horizons, average movements are generally close to zero. At longer horizons, some positive average movements appear, but larger initial edges do not consistently correspond to larger subsequent moves.
 
-At 24 hours, several buckets show positive average movement, but the magnitude of the move does not increase consistently with the initial edge.
-
-The same pattern is visible at 72 hours and 1 week. Some positive average movements emerge, but the largest initial positive-edge bucket does not consistently produce the largest subsequent positive move.
-
-The important result is therefore not simply the sign of the average movement.
-
-It is the absence of a stable monotonic relationship:
+The current conclusion is therefore:
 ```
-Large Edge ⇏ Large Subsequent Move
+Raw model-market dislocation has not yet demonstrated
+a stable predictive relationship with subsequent prediction-market price movement.
 ```
-within the current sample.
+This does not establish that probability-based trading has no economic value. The current test uses raw probabilities and price movement rather than calibrated probabilities and executable trading returns.
 
-#### 7.2.1. Interpretation
-The current evidence does not support using the raw model-market edge as a standalone linear predictor of subsequent prediction-market price movement.
-
-This is an important distinction from the original trading hypothesis.
-
-The model can produce economically large differences from market prices without those differences necessarily representing immediate or predictable market mispricing.
-
-Several mechanisms could explain the observed behaviour:
-- imperfect probability calibration;
-- risk-neutral versus physical probability differences;
-- liquidity and market-making effects;
-- differences in time-to-expiry;
-- volatility-regime dependence;
-- prediction-market microstructure;
-- persistence rather than immediate convergence;
-- contract-specific differences;
-- bid/ask and execution effects.
-
-The current test therefore provides evidence against a simple interpretation of:
+The next test is therefore to distinguish:
 ```
-Model Probability - Market Price
+Price Prediction
 ```
-as a direct short-horizon alpha signal.
-
-It does not, by itself, establish that probability-based trading has no economic value. In particular, the test uses raw model probabilities and subsequent price movement rather than a fully calibrated probability estimate and realized executable P&L.
-
-#### 7.2.3. Research Conclusion
-The current status of H2 is therefore:
+from:
 ```
-The raw model-market dislocation is measurable, but its relationship with subsequent prediction-market price movement is currently weak and non-monotonic across the tested horizons.
+Relative-Value Convergence
+```
+and ultimately from:
+```
+Executable Trading Return
 ```
 
-This means the next research stage should not simply increase the trading threshold or assume that larger discrepancies represent stronger alpha.
-
-Instead, I need to determine whether the observed dislocations become more informative after:
-```
-   Risk Neutral Signal
-            ↓
- Probability Calibration
-            ↓
- Contract Normalization
-            ↓
-   Market Dislocation
-            ↓
-Execution Adjusted Return
-```
-The objective is to establish whether the dislocation represents genuine relative value, model error, or a combination of market-structure effects.
-
-### 7.3. H3 - Cross-Market Arbitrage Identified a Positive Post-Fee Pricing Dislocation
+### 5.3. H3 - Cross-Market Arbitrage
 The cross-market arbitrage engine identified a live BTC opportunity involving two contracts representing the same underlying event:
 ```
 Market A: “Will Bitcoin reach $150,000 by December 31, 2026?” — NO at approximately $0.977
@@ -572,379 +294,173 @@ The contracts appeared to represent equivalent payoff conditions. The engine the
 
 The observed executable combination had a post-fee cost of approximately $0.9989 per pair, against a $1.00 settlement value:
 ```
-Theoretical edge ≈ $0.00112 per pair (~11.2 bps)
+Executable edge ≈ $0.00112 per pair (~11.2 bps)
 ```
 Approximately 113 pairs were available, implying roughly $0.13 of theoretical profit if both legs could be fully executed at the quoted prices.
 
-The opportunity supported the core H3 hypothesis: equivalent prediction-market contracts can temporarily trade at inconsistent executable prices.
+The opportunity was not deployed because existing capital was already committed to another structural position.
 
-However, the opportunity also demonstrated why theoretical arbitrage is not automatically an attractive trade. 
-
-Existing capital was already committed to another structural position, so deploying capital into the new opportunity required considering:
-- executable size and fill probability
-- legging and synchronization risk
-- capital required and time to settlement
-- opportunity cost versus existing positions
-
-The relevant decision framework is therefore:
+This highlighted an important distinction:
 ```
- Pricing Dislocation
-          ↓
-    Post-Fee Edge
-          ↓
-   Executable Size
-          ↓
-   Execution Risk
-          ↓
-  Capital Efficiency
-          ↓
- Portfolio Allocation
+Theoretical arbitrage is not automatically executable arbitrage.
 ```
+The relevant decision must incorporate:
+- executable liquidity
+- fill probability
+- legging risk
+- capital utilization
+- time to settlement
+- opportunity cost
 
-The current evidence supports the existence of cross-market pricing dislocations. The remaining research question is whether these opportunities can be captured reliably and at sufficient capital efficiency after execution constraints.
-
-### 7.4. H4 - Structural arbitrage engine identified opportunities arising from relationships between related contracts.
+### 5.4. H4 - Vertical Arbitrage
 One example is the vertical relationship between ETH $5,500 and $6,000 touch contracts.
 
-Because touching $6,000 necessarily implies touching $5,500:
+For an upward barrier, because touching $6,000 necessarily implies touching $5,500:
 ```
 P(touch $5,500) ≥ P(touch $6,000)
 ```
 
-A corresponding combination of:
+The corresponding structure:
 ```
 YES $5,500 + NO $6,000
 ```
-can have a minimum settlement value of $1 per matched pair, subject to contract definitions and settlement rules.
+has a minimum settlement value of $1, subject to contract definitions and settlement rules.
 
-The key finding is that the theoretical payoff relationship and the executable trading opportunity are separate problems.
+The strategy entered 86 pairs at approximately $0.9958, creating an initial post-fee executable edge of approximately 42 bps per pair.
 
-The theoretical structure may imply a guaranteed settlement value, but realizing the theoretical edge requires successfully acquiring the required legs at sufficient size.
+This position provides a live test of whether a deterministic payoff relationship can be converted into realized economic return.
 
-The practical risks include:
-- order-book depth
-- partial fills
-- legging
-- stale quotes
-- synchronization
-- fees
+The remaining evaluation focuses on:
+- execution
+- liquidity
+- capital duration
 - capital utilization
-- settlement interpretation
+- settlement
+- realized P&L
 
-The system therefore treats structural arbitrage signals as candidate opportunities, rather than assuming that every detected theoretical discrepancy represents realizable P&L.
-
-## 9. What I Learnt
+## 6. What I Learned
 The most important lesson from the project is:
 ```
 A signal is not automatically an edge.
 ```
 
-Instead, the full trading chain is:
+The project initially focused on finding pricing discrepancies. Live trading shifted the focus toward whether those discrepancies survive the full trading process.
+
+I now separate three layers of uncertainty:
+
+#### Model uncertainty
 ```
-     Signal
-        ↓
-   Probability
-        ↓
-   Calibration
-        ↓
-Market Discrepancy
-        ↓
-  Expected Value
-        ↓
-    Execution
-        ↓
-      Risk
-        ↓
-  Realized P&L
-```
-
-An error at any stage can turn an apparently attractive opportunity into a negative-expectancy trade.
-
-I have therefore learned to separate three different sources of uncertainty:
-
-#### 9.1. Model uncertainty
 Is the estimated probability correct?
-
-#### 9.2. Market uncertainty
-Does the prediction-market price actually represent a mispricing, or is the discrepancy explained by risk premia, liquidity or other market structure?
-
-#### 9.3. Execution uncertainty
+```
+#### Market uncertainty
+```
+Does the prediction-market price actually represent a mispricing,
+or is the discrepancy explained by risk premia, liquidity or other market structure?
+```
+#### Execution uncertainty
+```
 Can the theoretical opportunity actually be captured at the required price and size?
+```
+
+For probability-based strategies, model uncertainty is the dominant research problem.
+
+For structural arbitrage, the engine already handles the first layer of implementation realism by using executable prices, available liquidity and post-fee economics. The remaining challenge is dynamic execution realization: whether those conditions remain available long enough to complete the required trade.
 
 This decomposition has made the research more falsifiable.
 
-The initial question:
+For example:
+- H1 can fail because the probability model is poorly calibrated.
+- H2 can fail because model-market disagreement does not predict economically useful repricing.
+- H3/H4 can fail because the observed executable edge does not survive multi-leg execution, capital constraints or settlement.
+
+That distinction prevents a weak signal from being hidden by attractive theoretical economics, and prevents an attractive arbitrage relationship from being overstated without measuring its realized implementation cost.
+
+## 7. Next Steps
+### 7.1. Out-of-Sample Probability Calibration
+Build an explicit calibration layer:
 ```
-Can I find prediction-market mispricing using options information?
+     Risk-Neutral Signal
+              ↓
+         Calibration
+              ↓
+Estimated Physical Probability
 ```
 
-has evolved into three more precise questions:
-```
-Can the options surface provide useful information about event probabilities?
+Candidate methods include isotonic, logistic and parametric calibration.
 
-Can that signal be transformed into a calibrated physical probability?
+The calibration mapping will be estimated on an earlier period and frozen before out-of-sample evaluation.
 
-Does the resulting probability identify executable opportunities with positive expected value after realistic costs?
-```
-
-## 10. Key Failure Case: Probability Calibration
-The most important failure case identified so far is probability calibration.
-
-The initial model output could not simply be interpreted as a physical probability.
-
-The calibration analysis showed that predicted probabilities contained useful information about event likelihood, but the probability levels were systematically biased across parts of the distribution.
-
-This means that:
-```
-Raw Model Probability - Prediction-Market Price
-```
-can overstate or understate the true expected value.
-
-This is particularly important because the current strategy frequently evaluates very low touch probabilities.
-
-Therefore, aggregate calibration across the full probability range is insufficient.
-
-The next stage needs to establish calibration specifically in the region where the strategy actually trades, particularly approximately:
+### 7.2. Tail Calibration
+Because the strategy often evaluates low-probability events, calibration will be tested specifically in:
 ```
 0-1%
 1-2%
 2-5%
 5-10%
 ```
-with appropriate confidence intervals and sufficient sample sizes.
 
-## 11. Next Steps
-#### 11.1. Out-of-Sample Calibration
-The immediate priority is to construct an explicit calibration layer:
-```
-  Risk-Neutral Probability
-              ↓
-     Calibration Function
-              ↓
-Estimated Physical Probability
-```
+I will evaluate calibration error, confidence intervals, sample size and stability across time and volatility regimes.
 
-Candidate approaches include:
-- isotonic regression
-- logistic calibration
-- parametric calibration
-- regime-conditioned calibration
-
-The calibration mapping will be estimated using an earlier historical period and then frozen before evaluation on a genuinely out-of-sample period.
-
-The objective is to avoid fitting the calibration layer to the same observations used to evaluate it.
-
-#### 11.2. Tail Calibration
-Because the strategy frequently evaluates low-probability events, I will focus specifically on:
-- 0-1%
-- 1-2%
-- 2-5%
-- 5-10%
-
-For each region I want to evaluate:
-- calibration error
-- confidence intervals
-- sample size
-- stability across time
-- stability across volatility regimes
-
-The goal is to determine whether the model remains useful in the probability region that actually generates trades.
-
-#### 11.3. Separate Q-to-P Effects from Model Misspecification
-I want to determine whether calibration error is primarily caused by:
-```
-Risk-Neutral → Physical Measure Difference
-```
-
-or:
-```
-Model / First-Passage Misspecification
-```
-
-Potential experiments include:
-- using the full volatility smile
-- incorporating volatility skew and term structure
-- testing stochastic-volatility specifications
-- testing jump-aware models
-- comparing alternative first-passage formulations
-- conditioning calibration on volatility regime
-
-The objective is not to add complexity for its own sake.
-
-Each modelling change should be evaluated based on out-of-sample improvement.
-
-#### 11.4. Determine Whether Model-Market Dislocations Have Economic Predictive Value
-The current H2 results show that raw model-market dislocations do not have a clear monotonic relationship with subsequent prediction-market price movements.
-
-The next step is therefore to determine whether this result is caused by the probability signal itself, by the way the test is constructed, or by market microstructure.
-
-#### 11.4.1. Normalize the Direction of the Signal
-The first priority is to express every observation in a consistent economic direction.
-
-For YES contracts:
-```
-Edge_t = P^P(YES)_t - P_YES_t
-```
-For NO contracts, the corresponding edge should be expressed in terms of the NO probability and NO executable price.
-
-The future return should then be measured in the same directional convention.
-
-This prevents YES and NO contracts from being combined in a way that mechanically obscures the relationship.
-
-#### 11.4.2. Test Edge Convergence Directly
-Rather than measuring only:
-```
-P_t + h - P_t
-```
-
-I will measure the evolution of the model-market discrepancy itself:
-```
-Edge_t + h - Edge_t
-```
-This distinguishes two different hypotheses:
-
-#### Price prediction
-```
-     Edge_t
-        ↓
-Future Price Move
-```
-versus:
-
-#### Relative-value convergence
-```
-     Edge_t
-        ↓
-Smaller Future Edge
-```
-The second is more directly aligned with the relative-value hypothesis.
-
-A large positive edge should be followed by a reduction in the positive discrepancy if the market is converging toward the model estimate.
-
-#### 11.4.3. Re-run the Analysis After Probability Calibration
-The current analysis uses the raw model probability.
-
-The next version should use:
-```
-    P_Q
-     ↓
-Calibration
-     ↓
-    P^P
-```
-and then calculate:
+### 7.3. Re-test H2 After Calibration
+The next H2 test will use:
 ```
 Calibrated Edge = P^P - P_market
 ```
-This will test whether the weak H2 relationship is partly caused by systematic probability bias identified in H1.
 
-#### 11.4.4. Measure Trading Returns Rather Than Price Movement Alone
-Future price movement is only a proxy for trading performance.
-
-For each hypothetical entry, I will calculate the actual return available at the executable bid/ask:
+I will measure both:
 ```
-Return = Exit Value - Entry Cost - Fees - Slippage
+Edge_t+h - Edge_t
 ```
+and executable trading return.
 
-This allows the research to distinguish:
-- statistical association
-- theoretical convergence
-- executable return
-- realized trading P&L
+This distinguishes whether a large initial discrepancy:
+- converges
+- persists
+- widens
+- or produces economically useful trading returns
 
-The analysis should also incorporate holding periods and liquidation conditions rather than assuming that every position is held for a fixed horizon.
+The analysis will also normalize YES/NO direction and control for time-to-expiry, volatility, liquidity and contract type.
 
-#### 11.4.5. Test Monotonicity and Statistical Significance
-Rather than relying only on bucket averages, I will test whether there is a statistically significant relationship between initial edge and subsequent outcome.
+### 7.4. Improve Execution-Realization Modelling
+The arbitrage engine already incorporates:
+- executable ask prices
+- available order-book liquidity
+- trading fees
+- maximum executable size
 
-Potential tests include:
-rank correlation between initial edge and future return;
-regression of future return on initial edge;
-monotonicity across edge buckets;
-confidence intervals for bucket returns;
-bootstrap confidence intervals;
-significance after accounting for repeated observations.
+The next layer is to model whether the observed executable opportunity remains executable throughout the order lifecycle.
 
-The objective is to determine whether the observed relationship is distinguishable from sampling noise.
-
-#### 11.4.6. Control for Market Structure
-The relationship should also be conditioned on variables that may explain the apparent dislocation independently of predictive information.
-
-Relevant controls include:
-- time to expiry
-- current underlying price relative to strike
-- implied volatility
-- volatility regime
-- prediction-market spread
-- order-book depth
-- contract liquidity
-- market age
-- BTC versus ETH
-- touch versus expiry contracts
-
-This will help distinguish probability-model information from predictable market-microstructure effects.
-
-#### 11.4.7. Test Conditional Dislocations
-The current aggregate result may hide subsets where the signal behaves differently.
-
-I will therefore test whether the relationship varies across:
-- probability ranges
-- volatility regimes
-- time-to-expiry buckets
-- near versus far strikes
-- BTC versus ETH
-- touch versus expiry contracts
-- liquid versus illiquid markets
-
-The objective is not to search indefinitely for a profitable subgroup, but to establish whether there is a pre-specified economic reason for any observed conditional relationship.
-
-#### 11.4.8. Freeze the Research Specification Before Out-of-Sample Testing
-Once the signal definition, calibration method, return definition and conditioning variables have been selected, the specification should be frozen before evaluating a genuinely out-of-sample period.
-
-The final test should answer:
-```
-   Calibrated Edge
-          ↓
-  Executable Entry
-          ↓
-Future Economic Return
-```
-If the relationship remains weak after calibration, execution costs and out-of-sample testing, that would be evidence against H2 as a standalone source of trading edge.
-
-If a relationship survives these tests, the next question would be whether it is sufficiently stable and economically large to justify deployment.
-
-#### 11.5. Improve P&L Attribution
-The live system should attribute P&L across separate sources:
-- Probability Signal
-- Structural Arbitrage
-- Fees
-- Spread
-- Slippage
-- Execution
-- Inventory
-- Model Revisions
-
-The objective is to answer:
-```
-Where is the strategy actually making or losing money?
-```
-Aggregate P&L alone does not answer this question.
-
-#### 11.6. Improve Execution Modelling
-For structural arbitrage, I want to quantify the difference between theoretical and executable edge.
-
-Key measurements include:
-- available order-book depth
-- fill probability
-- time between legs
+I will measure:
+- quote persistence
 - partial-fill frequency
-- adverse selection
-- stale-quote frequency
-- capital utilization
+- legging loss
+- cancellation/replacement behaviour
+- realized versus displayed liquidity
+- capital duration
+- return on committed capital
 
-An opportunity should only be classified as executable arbitrage when its expected realized economics remain attractive after these constraints.
+The goal is to move from:
+```
+  Theoretical Edge
+          ↓
+   Executable Edge
+          ↓
+   Realized Return
+```
+### 7.5. Improve P&L Attribution
+Live P&L will be decomposed into:
+- probability signal
+- structural arbitrage
+- spread
+- fees
+- slippage
+- execution
+- inventory
+- model revisions
+- 
+This should identify where the strategy is actually creating or destroying value.
 
-#### 11.7. Establish Deployment Criteria
+### 7.6. Establish Deployment Criteria
 Before increasing capital allocation, I want explicit criteria for moving from research to deployment.
 
 For probability-based trades:
@@ -952,7 +468,6 @@ For probability-based trades:
 - positive expected value after costs
 - stability across time periods
 - robustness across model specifications
-- controlled drawdown and tail risk
 
 For structural arbitrage:
 - verified contract equivalence
@@ -961,7 +476,7 @@ For structural arbitrage:
 - acceptable legging risk
 - reliable settlement interpretation
 
-This creates a progression:
+The progression is:
 ```
       Research
           ↓
@@ -974,68 +489,48 @@ Limited Live Deployment
       Scaling
 ```
 
-## 12. Falsification Criteria
-A key part of the next stage is defining what evidence would cause me to reject or materially revise the current hypotheses.
+## 8. Falsification Criteria
+The purpose of these criteria is to ensure that the research process can reject the strategy rather than continuously modifying it until historical results appear attractive.
 
-#### 12.1. Probability Strategy
+#### 8.1. Probability Strategy
 The hypothesis would be weakened if:
-- out-of-sample calibration remains poor after reasonable calibration methods
-- tail calibration remains unstable
-- model-market dislocations do not show economically meaningful subsequent behavior
-- apparent edge disappears after realistic fees and execution costs
-- results are highly sensitive to small modelling assumptions
+- out-of-sample calibration remains poor
+- tail calibration is unstable
+- calibrated dislocations do not converge or generate economic returns
+- apparent edge disappears after realistic costs
+- results are highly sensitive to modelling assumptions
 
-#### 12.2. Structural Arbitrage
+#### 8.2. Structural Arbitrage
 The opportunity would be weakened if:
 - executable liquidity is insufficient
 - partial fills materially reduce realized edge
 - capital utilization dominates the theoretical return
 - legging risk is too large
-- settlement or contract-definition risk cannot be controlled sufficiently
+- settlement risk cannot be controlled
 
-The purpose of these criteria is to ensure that the research process can reject the strategy rather than continuously modifying it until historical results appear attractive.
+## 9. Conclusion
+The project has not yet established a statistically convincing persistent trading edge. The live sample is too small to support that conclusion.
 
-## 13. Conclusion
-The project has not yet established a statistically convincing persistent trading edge. 
+However, the research has produced several useful findings:
+- The options-derived model contains information about relative event likelihood, but its raw probabilities are not fully calibrated.
+- Model-market dislocations are measurable, but the current H2 analysis does not show a stable monotonic relationship between the size of the raw dislocation and subsequent prediction-market price movement.
+- Structural pricing relationships can produce attractive arbitrage opportunities. The engine already evaluates these opportunities using post-fee executable prices and available liquidity, rather than theoretical midpoint prices. The remaining structural-arbitrage research question is therefore more specific: whether an opportunity that is executable in an order-book snapshot can be reliably converted into realized return once partial fills, capital duration and settlement are considered.
 
-The current live sample is too small to support that conclusion.
+The next stage is therefore focused on calibration, out-of-sample validation, executable-return measurement and execution modelling.
 
-It has, however, produced several useful empirical and engineering findings.
-
-The options-derived model appears to contain information about the relative likelihood of barrier-touch events, but its raw probabilities are not fully calibrated.
-
-Prediction-market prices can differ materially from those estimates, but a model-market discrepancy does not by itself establish mispricing.
-
-Structural relationships between prediction-market contracts can produce theoretically attractive arbitrage opportunities, but execution, liquidity, synchronization and settlement constraints determine whether those opportunities are economically realizable.
-
-The next stage of research is therefore focused on:
-- improving probability calibration
-- validating calibration out of sample
-- understanding the source of calibration error
-- focusing specifically on the low-probability tail relevant to trading
-- testing whether calibrated model-market dislocations exhibit economically meaningful behavior
-- improving execution and P&L attribution
-
-The broader objective is not simply to produce a higher historical return.
-
-It is to establish a research process in which a trading hypothesis can be:
+The broader research framework is:
 ```
-    Hypothesized
+     Hypothesis
           ↓
-      Measured
+     Measurement
           ↓
-Tested Out-of-Sample
+  Out-of-Sample Test
           ↓
-      Executed
+      Execution
           ↓
-      Monitored
+        Risk
           ↓
-Falsified or Supported
+     Realized PnL
 ```
 
-That framework is ultimately more important than the current small live P&L sample.
-
-It provides a disciplined process for determining whether an apparent statistical relationship represents a robust and executable source of trading edge.
-
-## Appendix
-Trading Journal
+The objective is not simply to find a strategy that looks profitable historically. It is to determine whether an apparent source of edge remains robust when exposed to realistic market conditions, costs and implementation constraints.
