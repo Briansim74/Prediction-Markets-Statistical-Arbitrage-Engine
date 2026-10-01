@@ -1265,17 +1265,16 @@ class Portfolio():
 
         params = self.format_arbitrage_exit(api, leg_1, leg_2)
 
-        confirm_order = (input("Place this order? Type YES to confirm: ") == "YES")
+        size = input("Place this order? Enter SIZE to confirm: ")
         
-        if confirm_order == True:
-
-            try:
+        try:
+            if isinstance(float(size), float):    
                 print("")
-                order_1 = api.place_limit_order_test(
+                order_1 = api.place_limit_order(
                     token_id=params["leg_1_token_id"],
                     side="sell",
                     price=params["leg_1_bid"],
-                    size=params["normalized_size"],
+                    size=size,
                     order_type="GTC",
                     client_order_id=params["leg_1_client_oid"]
                 )
@@ -1283,11 +1282,11 @@ class Portfolio():
                 print("\nLEG 1 LIMIT ORDER SUBMITTED\n\n")
                 print(order_1)
 
-                order_2 = api.place_limit_order_test(
+                order_2 = api.place_limit_order(
                     token_id=params["leg_2_token_id"],
                     side="sell",
                     price=params["leg_2_bid"],
-                    size=params["normalized_size"],
+                    size=size,
                     order_type="GTC",
                     client_order_id=params["leg_2_client_oid"]
                 )
@@ -1301,9 +1300,9 @@ class Portfolio():
                     "condition_id": leg_1["condition_id"],
                     "token_id": leg_1["token_id"],
                     "outcome": leg_1["outcome"],
-                    "side": "BUY",
+                    "side": "SELL",
                     "price": float(params["leg_1_bid"]),
-                    "requested_size": params["normalized_size"],
+                    "requested_size": size,
                     "order_type": "GTC",
                     "status": "OPEN",
                     "created_at": datetime.now(timezone.utc),
@@ -1318,9 +1317,9 @@ class Portfolio():
                     "condition_id": leg_1["condition_id"],
                     "token_id": leg_2["token_id"],
                     "outcome": leg_2["outcome"],
-                    "side": "BUY",
+                    "side": "SELL",
                     "price": float(params["leg_2_bid"]),
-                    "requested_size": params["normalized_size"],
+                    "requested_size": size,
                     "order_type": "GTC",
                     "status": "OPEN",
                     "created_at": datetime.now(timezone.utc),
@@ -1333,9 +1332,9 @@ class Portfolio():
         
                 print("\nLIMIT ORDER RECORDED\n\n")
 
-            except Exception as e:
-                print("\nLIMIT ORDER ERROR\n\n")
-                print(e)
+        except Exception as e:
+            print("\nLIMIT ORDER ERROR\n\n")
+            print(e)
     
         return orders_df
 
