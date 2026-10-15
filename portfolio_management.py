@@ -1339,6 +1339,95 @@ class Portfolio():
         return orders_df
 
 
+    def close_arbitrage_positions_test(self, api, positions_df, orders_df, 
+                                      question_1, outcome_1, question_2, outcome_2):
+    
+        leg_1 = positions_df[
+            (positions_df["question"] == question_1) &
+            (positions_df["outcome"] == outcome_1)
+            ].iloc[0]
+
+        leg_2 = positions_df[
+            (positions_df["question"] == question_2) &
+            (positions_df["outcome"] == outcome_2)
+            ].iloc[0]
+
+        params = self.format_arbitrage_exit(api, leg_1, leg_2)
+
+        size = input("Place this order? Enter SIZE to confirm: ")
+        
+        try:
+            if isinstance(float(size), float):    
+                print("")
+                order_1 = api.place_limit_order_test(
+                    token_id=params["leg_1_token_id"],
+                    side="sell",
+                    price=params["leg_1_bid"],
+                    size=size,
+                    order_type="GTC",
+                    client_order_id=params["leg_1_client_oid"]
+                )
+        
+                print("\nLEG 1 LIMIT ORDER SUBMITTED\n\n")
+                print(order_1)
+
+                order_2 = api.place_limit_order_test(
+                    token_id=params["leg_2_token_id"],
+                    side="sell",
+                    price=params["leg_2_bid"],
+                    size=size,
+                    order_type="GTC",
+                    client_order_id=params["leg_2_client_oid"]
+                )
+        
+                print("\nLEG 2 LIMIT ORDER SUBMITTED\n\n")
+                print(order_2)
+
+                order_row = {
+                    "question": question_1,
+                    "order_id": order_1["clob_order_id"],
+                    "condition_id": leg_1["condition_id"],
+                    "token_id": leg_1["token_id"],
+                    "outcome": leg_1["outcome"],
+                    "side": "SELL",
+                    "price": float(params["leg_1_bid"]),
+                    "requested_size": size,
+                    "order_type": "GTC",
+                    "status": "OPEN",
+                    "created_at": datetime.now(timezone.utc),
+                    "cancelled_at": None,
+                }
+        
+                orders_df = pd.concat([orders_df, pd.DataFrame([order_row])], ignore_index=True)
+
+                order_row = {
+                    "question": question_2,
+                    "order_id": order_2["clob_order_id"],
+                    "condition_id": leg_1["condition_id"],
+                    "token_id": leg_2["token_id"],
+                    "outcome": leg_2["outcome"],
+                    "side": "SELL",
+                    "price": float(params["leg_2_bid"]),
+                    "requested_size": size,
+                    "order_type": "GTC",
+                    "status": "OPEN",
+                    "created_at": datetime.now(timezone.utc),
+                    "cancelled_at": None,
+                }
+        
+                orders_df = pd.concat([orders_df, pd.DataFrame([order_row])], ignore_index=True)
+                orders_df["created_at"] = pd.to_datetime(orders_df["created_at"], utc=True)
+                orders_df["cancelled_at"] = pd.to_datetime(orders_df["cancelled_at"], utc=True)
+        
+                print("\nLIMIT ORDER RECORDED\n\n")
+
+        except Exception as e:
+            print("\nLIMIT ORDER ERROR\n\n")
+            print(e)
+    
+        return orders_df
+
+
     def save_snapshots(self, DATA_DIR, df, df_name):
 
         date = datetime.now().strftime("%Y%m%d")
